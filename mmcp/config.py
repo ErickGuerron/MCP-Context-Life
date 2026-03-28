@@ -67,6 +67,7 @@ class CLConfig:
 
     # --- Cache ---
     cache_max_entries: int = 50
+    cache_db_path: str = ""  # Empty = auto (data_dir/session.db)
 
     # --- Paths ---
     data_dir: str = ""  # Empty = auto-resolved
@@ -89,6 +90,12 @@ class CLConfig:
             return self.rag_db_path
         return str(self.resolve_data_dir() / "lancedb")
 
+    def resolve_cache_db_path(self) -> Path:
+        """Resolve the SQLite session database path."""
+        if self.cache_db_path:
+            return Path(self.cache_db_path)
+        return self.resolve_data_dir() / "session.db"
+
 
 def _env_override(config: CLConfig) -> None:
     """Apply CL_* environment variable overrides."""
@@ -104,6 +111,7 @@ def _env_override(config: CLConfig) -> None:
         "CL_TOKEN_BUDGET_SAFETY_BUFFER": ("token_budget_safety_buffer", int),
         "CL_TRIM_PRESERVE_RECENT": ("trim_preserve_recent", int),
         "CL_CACHE_MAX_ENTRIES": ("cache_max_entries", int),
+        "CL_CACHE_DB_PATH": ("cache_db_path", str),
         "CL_DATA_DIR": ("data_dir", str),
         "CL_GITHUB_REPO": ("github_repo", str),
     }
@@ -161,6 +169,8 @@ def load_config(config_path: Optional[str] = None) -> CLConfig:
         cache_cfg = data.get("cache", {})
         if "max_entries" in cache_cfg:
             config.cache_max_entries = cache_cfg["max_entries"]
+        if "db_path" in cache_cfg:
+            config.cache_db_path = cache_cfg["db_path"]
 
         paths = data.get("paths", {})
         if "data_dir" in paths:

@@ -5,6 +5,7 @@ Entry point with subcommands:
     context-life              → start MCP server (stdio)
     context-life serve        → start MCP server (stdio)
     context-life serve --http → start MCP server (HTTP)
+    context-life tui          → open the interactive terminal menu
     context-life info         → show system info + config
     context-life doctor       → run environment diagnostics
     context-life upgrade      → upgrade to latest GitHub release
@@ -64,6 +65,10 @@ def main():
     elif command in ("help", "--help", "-h"):
         from mmcp.cli import show_help
         show_help()
+
+    elif command == "tui":
+        from mmcp.cli import do_tui
+        do_tui()
 
     elif command == "--transport":
         # Legacy support: context-life --transport http

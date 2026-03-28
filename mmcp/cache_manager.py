@@ -28,6 +28,8 @@ import time
 from dataclasses import dataclass, field
 from typing import Optional
 
+from mmcp.config import get_config
+from mmcp.session_store import SessionStore
 from mmcp.token_counter import count_tokens, DEFAULT_ENCODING
 
 
@@ -118,14 +120,15 @@ class CacheStore:
     to serve it from their prompt cache.
     """
 
-    def __init__(self, max_entries: int = 100):
+    def __init__(self, max_entries: Optional[int] = None):
+        self._max_entries = max_entries or get_config().cache_max_entries
         self._entries: dict[str, CacheEntry] = {}
-        self._max_entries = max_entries
+        self._session_store = SessionStore()
         self.stats = CacheStats()
 
     def lookup(self, content: str) -> tuple[bool, str]:
         """
-        Check if content is already cached.
+        Check if content is already cached (L1 memory or L2 SQLite).
 
         Returns:
             (is_cached, content_hash)
@@ -133,8 +136,27 @@ class CacheStore:
         content_hash = _hash_content(content)
         self.stats.total_lookups += 1
 
+        # L1 check
         if content_hash in self._entries:
             self._entries[content_hash].record_hit()
+            self._session_store.record_prefix_hit(content_hash)
+            self.stats.cache_hits += 1
+            return True, content_hash
+
+        # L2 check (SQLite)
+        row = self._session_store.lookup_prefix(content_hash)
+        if row:
+            token_count, sq_hits = row
+            # Promote to L1
+            entry = CacheEntry(
+                content_hash=content_hash,
+                token_count=token_count,
+            )
+            entry.hits = sq_hits
+            entry.record_hit()
+            self._entries[content_hash] = entry
+            self._session_store.record_prefix_hit(content_hash)
+            
             self.stats.cache_hits += 1
             return True, content_hash
 
@@ -158,6 +180,11 @@ class CacheStore:
             content_hash=content_hash,
             token_count=token_count,
         )
+        
+        # L2 write-through
+        self._session_store.store_prefix(content_hash, token_count)
+        self._session_store.evict_old_prefixes(self._max_entries)
+        
         return content_hash
 
     def get_token_count(self, content_hash: str) -> int:
@@ -170,9 +197,14 @@ class CacheStore:
         return self.stats.to_dict()
 
     def clear(self) -> None:
-        """Clear all cache entries and reset stats."""
+        """Clear L1 cache entries and stats (keeps L2 persistent)."""
         self._entries.clear()
         self.stats = CacheStats()
+
+    def hard_clear(self) -> None:
+        """Clear L1 AND wipe persistent L2 storage."""
+        self.clear()
+        self._session_store.clear()
 
 
 class CacheLoop:
