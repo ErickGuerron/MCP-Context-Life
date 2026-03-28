@@ -1,6 +1,6 @@
-# MMCP — Monster Model Context Protocol
+# Context-Life (CL) — LLM Context Optimization MCP Server
 
-> LLM context optimization server with local RAG, intelligent trim history, token counting, and prompt caching.
+> MCP server for LLM context optimization with local RAG, intelligent trim history, token counting, and prompt caching.
 > Zero API calls — everything runs locally on your machine.
 
 ## Install
@@ -8,20 +8,20 @@
 ### From GitHub (recommended)
 
 ```bash
-pip install git+https://github.com/ErickGuerron/contexto-life.git
+pip install git+https://github.com/ErickGuerron/MCP-Context-Life.git
 ```
 
-This installs the `mmcp` CLI command globally. Verify:
+This installs the `context-life` CLI command globally. Verify:
 
 ```bash
-mmcp --help
+context-life --help
 ```
 
 ### From source (for development)
 
 ```bash
-git clone https://github.com/ErickGuerron/contexto-life.git
-cd contexto-life
+git clone https://github.com/ErickGuerron/MCP-Context-Life.git
+cd MCP-Context-Life
 pip install -e ".[dev]"
 ```
 
@@ -34,9 +34,9 @@ Add to your `~/.config/opencode/opencode.json`:
 ```json
 {
   "mcp": {
-    "mmcp": {
+    "context-life": {
       "type": "local",
-      "command": ["mmcp"],
+      "command": ["context-life"],
       "enabled": true
     }
   }
@@ -52,8 +52,8 @@ Edit `claude_desktop_config.json`:
 ```json
 {
   "mcpServers": {
-    "mmcp": {
-      "command": "mmcp",
+    "context-life": {
+      "command": "context-life",
       "args": [],
       "env": {}
     }
@@ -63,13 +63,11 @@ Edit `claude_desktop_config.json`:
 
 ### Cursor / Windsurf
 
-In `Settings > MCP Servers > Add Server`:
-
 ```json
 {
   "mcpServers": {
-    "mmcp": {
-      "command": "mmcp"
+    "context-life": {
+      "command": "context-life"
     }
   }
 }
@@ -80,16 +78,14 @@ In `Settings > MCP Servers > Add Server`:
 ```json
 {
   "mcpServers": {
-    "mmcp": {
-      "command": "mmcp"
+    "context-life": {
+      "command": "context-life"
     }
   }
 }
 ```
 
 ### Running from source (without install)
-
-If you cloned the repo and didn't do `pip install`:
 
 ```json
 {
@@ -123,7 +119,7 @@ If you cloned the repo and didn't do `pip install`:
 └─────────────────┬────────────────────────┘
                   │ MCP Protocol (stdio)
 ┌─────────────────▼────────────────────────┐
-│              MMCP Server                 │
+│           Context-Life Server            │
 │  ┌─────────────┐  ┌───────────────────┐  │
 │  │ Token       │  │ Trim History      │  │
 │  │ Counter     │  │ (tail/head/smart) │  │
@@ -165,13 +161,10 @@ Detects when the static prefix (system prompt + RAG context) hasn't changed betw
 
 ```bash
 # Run with HTTP transport for testing
-mmcp --transport http
+context-life --transport http
 
 # Or from source
 python -m mmcp --transport http
-
-# Run benchmarks
-python benchmarks/run_context_benchmarks.py
 
 # Lint
 ruff check mmcp/
