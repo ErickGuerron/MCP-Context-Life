@@ -233,17 +233,6 @@ jobs:
         with:
           tag_name: ${{ steps.version.outputs.VERSION }}
           name: "Context-Life ${{ steps.version.outputs.VERSION }}"
-          body: |
-            ## Context-Life ${{ steps.version.outputs.VERSION }}
-
-            ### Install
-            ```bash
-            pip install git+https://github.com/${{ github.repository }}.git@${{ steps.version.outputs.VERSION }}
-            ```
-
-            ### Upgrade
-            ```bash
-            context-life upgrade
-            ```
+          generate_release_notes: true
           draft: false
           prerelease: false

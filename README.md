@@ -5,7 +5,27 @@
 
 ## Install
 
-### From GitHub (recommended)
+### Using uv (Fastest & Recommended)
+
+`uv` is an extremely fast Python package installer that seamlessly manages isolated CLI tools across Windows, macOS, and Linux without affecting your system Python environment.
+
+```bash
+uv tool install "git+https://github.com/ErickGuerron/MCP-Context-Life.git"
+```
+
+### Using pipx (Standard isolated install)
+
+Like `uv`, `pipx` installs the tool in an isolated sandbox, avoiding dependency conflicts.
+
+```bash
+pipx install "git+https://github.com/ErickGuerron/MCP-Context-Life.git"
+```
+
+### Note for Windows Users
+> [!WARNING]
+> Windows locks running `.exe` files. If you get a `[WinError 32]` when trying to upgrade or reinstall, it means the `context-life` server is currently running. **You must close your MCP client (OpenCode, Claude Desktop, Cursor, etc.) or stop any running terminal instances of context-life before running an upgrade command.**
+
+### Standard pip (For Virtual Environments)
 
 ```bash
 pip install git+https://github.com/ErickGuerron/MCP-Context-Life.git
@@ -15,31 +35,19 @@ pip install git+https://github.com/ErickGuerron/MCP-Context-Life.git
 
 ```bash
 # Full install (default — includes RAG)
-pip install "git+https://github.com/ErickGuerron/MCP-Context-Life.git"
+pipx install "git+https://github.com/ErickGuerron/MCP-Context-Life.git"
 
 # Core only (token counting + trim, no ML dependencies)
-pip install "context-life[core]"
+pipx install "context-life[core]"
 
 # With RAG (LanceDB + sentence-transformers)
-pip install "context-life[rag]"
-
-# Development (testing + linting)
-pip install -e ".[dev]"
-
-# Everything
-pip install -e ".[all]"
+pipx install "context-life[rag]"
 
 # Pinned to a specific version
-pip install "git+https://github.com/ErickGuerron/MCP-Context-Life.git@v0.3.0"
+pipx install "git+https://github.com/ErickGuerron/MCP-Context-Life.git@v0.3.1"
 ```
 
-### Isolated install with pipx
-
-```bash
-pipx install "git+https://github.com/ErickGuerron/MCP-Context-Life.git"
-```
-
-### From source
+### From source (for development)
 
 ```bash
 git clone https://github.com/ErickGuerron/MCP-Context-Life.git
@@ -65,7 +73,7 @@ context-life serve --http              # Start MCP server (HTTP)
 context-life info                      # System info, config, dependencies
 context-life doctor                    # Environment diagnostics
 context-life upgrade                   # Upgrade to latest GitHub release
-context-life upgrade --version v0.3.0  # Install specific version
+context-life upgrade --version v0.3.1  # Install specific version
 context-life upgrade --dry-run         # Check without installing
 context-life version                   # Show version
 context-life help                      # Show help
@@ -249,4 +257,4 @@ pytest
 
 ## License
 
-MIT
+[MIT License](LICENSE.md)
