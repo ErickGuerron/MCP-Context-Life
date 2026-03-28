@@ -21,10 +21,13 @@ from importlib.metadata import version as pkg_version
 from pathlib import Path
 
 from rich.console import Console
+from rich.prompt import Prompt
 from rich.panel import Panel
 from rich.table import Table
 from rich.text import Text
+from rich.panel import Panel
 from rich import box
+from rich.align import Align
 
 CONSOLE = Console()
 
@@ -97,7 +100,7 @@ def print_banner():
     """Print the Context-Life startup banner."""
     ver = get_version()
     banner_text = Text(BANNER, style="bold cyan")
-    CONSOLE.print(banner_text)
+    CONSOLE.print(Align.center(banner_text))
     CONSOLE.print(
         f"  [bold white]Context-Life[/] [dim](CL)[/dim] [bold green]v{ver}[/]  "
         f"[dim]— LLM Context Optimization MCP Server[/dim]\n",
@@ -117,7 +120,7 @@ def show_info():
     sys_table.add_row("Platform", platform.platform())
     sys_table.add_row("Architecture", platform.machine())
     sys_table.add_row("OS", platform.system())
-    CONSOLE.print(sys_table)
+    CONSOLE.print(Align.center(sys_table))
     CONSOLE.print()
 
     # Config info
@@ -133,7 +136,7 @@ def show_info():
     cfg_table.add_row("RAG min_score", str(cfg.rag_min_score))
     cfg_table.add_row("Token budget", f"{cfg.token_budget_default:,}")
     cfg_table.add_row("Trim preserve_recent", str(cfg.trim_preserve_recent))
-    CONSOLE.print(cfg_table)
+    CONSOLE.print(Align.center(cfg_table))
     CONSOLE.print()
 
     # Dependencies
@@ -149,7 +152,7 @@ def show_info():
         ok, ver = _safe_import_check(importable)
         status = "[green]installed[/]" if ok else "[red]missing[/]"
         dep_table.add_row(name, status, ver)
-    CONSOLE.print(dep_table)
+    CONSOLE.print(Align.center(dep_table))
     CONSOLE.print()
 
     # Tools
@@ -168,7 +171,7 @@ def show_info():
         ("reset_token_budget", "Reset token budget tracker"),
     ]:
         feat_table.add_row(tool, desc)
-    CONSOLE.print(feat_table)
+    CONSOLE.print(Align.center(feat_table))
     CONSOLE.print()
 
     # Resources
@@ -178,11 +181,11 @@ def show_info():
     res_table.add_row("status://token_budget", "Token budget consumption")
     res_table.add_row("cache://status", "Cache hit/miss stats")
     res_table.add_row("rag://stats", "RAG knowledge base info")
-    CONSOLE.print(res_table)
+    CONSOLE.print(Align.center(res_table))
     CONSOLE.print()
 
     # Integration panel
-    CONSOLE.print(Panel(
+    CONSOLE.print(Align.center(Panel(
         "[bold cyan]MCP Client Config:[/]\n\n"
         '[white]"context-life": {\n'
         '  "type": "local",\n'
@@ -190,7 +193,7 @@ def show_info():
         '  "enabled": true\n'
         "}[/]",
         title="🔌 Integration", border_style="dim", box=box.ROUNDED,
-    ))
+    )))
 
 
 def do_upgrade(target_version: str | None = None, dry_run: bool = False):
@@ -215,12 +218,12 @@ def do_upgrade(target_version: str | None = None, dry_run: bool = False):
     else:
         install_target = f"git+{REPO_URL}@v{tag}"
 
-    CONSOLE.print(Panel(
+    CONSOLE.print(Align.center(Panel(
         f"[bold]Current version:[/] [yellow]v{old_version}[/]\n"
         f"[bold]Target version:[/]  [green]v{tag or 'latest'}[/]"
         + (f"\n[dim]{release_url}[/]" if release_url else ""),
         title="🔄 Context-Life Upgrade", border_style="yellow", box=box.ROUNDED,
-    ))
+    )))
 
     if tag and tag == old_version:
         CONSOLE.print(f"\n  [bold green]✓ Already up to date[/] [dim](v{old_version})[/]\n")
@@ -255,7 +258,7 @@ def do_doctor():
     """Run environment diagnostics."""
     print_banner()
 
-    CONSOLE.print(Panel("[bold]Running environment checks...[/]", title="🩺 Doctor", border_style="cyan", box=box.ROUNDED))
+    CONSOLE.print(Align.center(Panel("[bold]Running environment checks...[/]", title="🩺 Doctor", border_style="cyan", box=box.ROUNDED)))
     CONSOLE.print()
 
     checks: list[tuple[str, str, str]] = []  # (name, status, detail)
@@ -320,7 +323,7 @@ def do_doctor():
     for name, status, detail in checks:
         doc_table.add_row(name, status, detail)
 
-    CONSOLE.print(doc_table)
+    CONSOLE.print(Align.center(doc_table))
     CONSOLE.print()
 
     has_errors = any(s == "❌" for _, s, _ in checks)
@@ -359,5 +362,205 @@ def show_help():
     for cmd, desc in commands:
         help_table.add_row(cmd, desc)
 
-    CONSOLE.print(help_table)
+    CONSOLE.print(Align.center(help_table))
     CONSOLE.print()
+
+def format_big_number(n: int | float) -> str:
+    """Format large numbers with K, M, B suffixes."""
+    if n >= 1_000_000_000:
+        return f"{n / 1_000_000_000:.2f}B"
+    elif n >= 1_000_000:
+        return f"{n / 1_000_000:.2f}M"
+    elif n >= 1_000:
+        return f"{n / 1_000:.1f}K"
+    return str(int(n))
+
+
+def show_telemetry_dashboard():
+    """Display the usage metrics, savings, and budget."""
+    print_banner()
+    from mmcp.session_store import SessionStore
+    from mmcp.config import get_config
+    
+    cfg = get_config()
+    store = SessionStore(cfg.resolve_cache_db_path())
+    
+    weekly = store.get_weekly_usage()
+    all_time = store.get_all_time_stats()
+    
+    # 1. All-Time Stats
+    total_processed = all_time["used"] + all_time["saved"]
+    savings_pct = (all_time["saved"] / total_processed * 100) if total_processed > 0 else 0.0
+    
+    stats_table = Table(title="💰 All-Time Savings", box=box.ROUNDED, border_style="green", title_style="bold green")
+    stats_table.add_column("Metric", style="cyan", width=30)
+    stats_table.add_column("Value", style="bold white", justify="right")
+    
+    stats_table.add_row("Total Processed (Sent + Hits)", format_big_number(total_processed))
+    stats_table.add_row("Total Saved (Cache Hits)", f"[green]{format_big_number(all_time['saved'])}[/]")
+    stats_table.add_row("Real Savings Rate", f"[bold green]{savings_pct:.1f}%[/]")
+    
+    CONSOLE.print(Align.center(stats_table))
+    CONSOLE.print()
+    
+    # 2. Weekly Usage per Model
+    budget = cfg.token_budget_default
+    usage_table = Table(title="📅 Weekly Usage Tracker (7 Days)", box=box.ROUNDED, border_style="blue", title_style="bold blue")
+    usage_table.add_column("Model", style="cyan", width=25)
+    usage_table.add_column("Budget", style="dim", justify="right")
+    usage_table.add_column("Used", justify="right")
+    usage_table.add_column("Remaining", justify="right")
+    usage_table.add_column("Status", justify="center")
+    
+    if not weekly:
+        usage_table.add_row("[dim]No usage data[/]", "-", "-", "-", "-")
+    else:
+        for model_name, data in weekly.items():
+            used = data["used"]
+            remaining = max(0, budget - used)
+            
+            # Determine status color
+            if remaining < (budget * 0.15):  # Less than 15%
+                color = "red"
+                status = "[bold red]CRITICAL[/]"
+            elif remaining < (budget * 0.30): # Less than 30%
+                color = "yellow"
+                status = "[bold yellow]WARNING[/]"
+            else:
+                color = "green"
+                status = "[bold green]OK[/]"
+                
+            usage_table.add_row(
+                model_name,
+                format_big_number(budget),
+                f"[{color}]{format_big_number(used)}[/]",
+                f"[{color}]{format_big_number(remaining)}[/]",
+                status
+            )
+
+    CONSOLE.print(Align.center(usage_table))
+    CONSOLE.print(Align.center(Panel(
+        "[dim]Note: Weekly stats reset dynamically on a rolling 7-day window.\n"
+        "Budget constraints apply per distinct model string.[/]",
+        border_style="dim", box=box.ROUNDED
+    )))
+    CONSOLE.print()
+
+
+def do_tui():
+    """Starts the static interactive CLI menu using Rich Live."""
+    import os
+    import sys
+    from rich.live import Live
+    from rich.console import Group
+    options = [
+        ("[i] System Info", show_info),
+        ("[+] Diagnostics Doctor", do_doctor),
+        ("[~] Telemetry Dashboard", show_telemetry_dashboard),
+        ("[*] Upgrade Context-Life", do_upgrade),
+        ("[x] Exit", None)
+    ]
+    
+    # We use a mutable list trick so nested functions can modify it
+    # without running into 'nonlocal' scoping issues in Python 3.10
+    state = {"selected": 0, "running": True}
+
+    def get_char() -> str:
+        """Cross-platform blocking keypress reader."""
+        try:
+            if os.name == 'nt':
+                import msvcrt
+                char = msvcrt.getch()
+                if char in (b'\xe0', b'\x00'):
+                    char = msvcrt.getch()
+                    if char == b'H': return 'up'
+                    if char == b'P': return 'down'
+                    return ''
+                return char.decode('utf-8').lower()
+            else:
+                import tty, termios
+                fd = sys.stdin.fileno()
+                old_settings = termios.tcgetattr(fd)
+                try:
+                    tty.setraw(fd)
+                    char = sys.stdin.read(1)
+                    if char == '\x1b':
+                        next1 = sys.stdin.read(1)
+                        next2 = sys.stdin.read(1)
+                        if next1 == '[':
+                            if next2 == 'A': return 'up'
+                            if next2 == 'B': return 'down'
+                    return char.lower()
+                finally:
+                    termios.tcsetattr(fd, termios.TCSADRAIN, old_settings)
+        except Exception:
+            return ''
+
+    def generate_menu():
+        lines = []
+        # Add a bit of top padding inside the panel
+        lines.append(Text(""))
+        
+        for i, (label, _) in enumerate(options):
+            if i == state["selected"]:
+                lines.append(Align.center(Text(f"▶ {label}", style="bold cyan")))
+            else:
+                lines.append(Align.center(Text(f"  {label}", style="dim")))
+                
+        # Footer
+        lines.append(Text("\n"))
+        lines.append(Align.center(Text("j/k or ↑/↓ navigate • enter select • q quit", style="dim italic")))
+        
+        menu_panel = Panel(
+            Group(*lines),
+            title="● Main Menu", border_style="magenta", box=box.ROUNDED, width=65
+        )
+        
+        ver = get_version()
+        banner_text = Text(BANNER, style="bold cyan")
+        
+        group = Group(
+            Align.center(banner_text),
+            Align.center(Text(
+                f"Context-Life (CL) v{ver}  —  LLM Context Optimization MCP Server\n",
+                style="bold white"
+            )),
+            Align.center(menu_panel)
+        )
+        return group
+
+    with Live(generate_menu(), refresh_per_second=10, screen=True, transient=True) as live:
+        while state["running"]:
+            c = get_char()
+            if c in ('j', 'down'):
+                state["selected"] = (state["selected"] + 1) % len(options)
+            elif c in ('k', 'up'):
+                state["selected"] = (state["selected"] - 1) % len(options)
+            elif c in ('\r', '\n'):
+                state["running"] = False
+            elif c == 'q':
+                state["selected"] = len(options) - 1
+                state["running"] = False
+            
+            live.update(generate_menu())
+
+    # Screen closes automatically due to 'transient=True' and 'screen=True'
+    CONSOLE.clear()
+    action = options[state["selected"]][1]
+    
+    if action is None:
+        CONSOLE.print("\n  [bold green]👋 See you next time![/]\n")
+        sys.exit(0)
+    else:
+        action()
+        if os.name == 'nt':
+            import msvcrt
+            CONSOLE.print("\n[dim italic]Press any key to return to Main Menu...[/]")
+            msvcrt.getch()
+        else:
+            import sys
+            CONSOLE.print("\n[dim italic]Press Enter to return to Main Menu...[/]")
+            sys.stdin.readline()
+            
+        do_tui()
+
