@@ -463,7 +463,19 @@ def do_tui():
     
     # We use a mutable list trick so nested functions can modify it
     # without running into 'nonlocal' scoping issues in Python 3.10
-    state = {"selected": 0, "running": True}
+    state = {"selected": 0, "running": True, "latest_version": None}
+
+    def check_update_bg():
+        try:
+            latest, _ = _fetch_latest_release()
+            current = get_version()
+            if latest and latest != current and latest != "dev" and current != "dev":
+                state["latest_version"] = latest
+        except Exception:
+            pass
+
+    import threading
+    threading.Thread(target=check_update_bg, daemon=True).start()
 
     def get_char() -> str:
         """Cross-platform blocking keypress reader."""
@@ -519,12 +531,20 @@ def do_tui():
         ver = get_version()
         banner_text = Text(BANNER, style="bold cyan")
         
+        update_alert = Text("")
+        if state["latest_version"]:
+            update_alert = Text(
+                f"  ⚠️ NEW VERSION AVAILABLE: v{state['latest_version']}! Select [*] Upgrade Context-Life to install ⚠️  \n", 
+                style="bold yellow"
+            )
+
         group = Group(
             Align.center(banner_text),
             Align.center(Text(
                 f"Context-Life (CL) v{ver}  —  LLM Context Optimization MCP Server\n",
                 style="bold white"
             )),
+            Align.center(update_alert),
             Align.center(menu_panel)
         )
         return group
@@ -545,22 +565,27 @@ def do_tui():
             live.update(generate_menu())
 
     # Screen closes automatically due to 'transient=True' and 'screen=True'
-    CONSOLE.clear()
     action = options[state["selected"]][1]
     
     if action is None:
         CONSOLE.print("\n  [bold green]👋 See you next time![/]\n")
         sys.exit(0)
     else:
-        action()
-        if os.name == 'nt':
-            import msvcrt
-            CONSOLE.print("\n[dim italic]Press any key to return to Main Menu...[/]")
-            msvcrt.getch()
-        else:
-            import sys
-            CONSOLE.print("\n[dim italic]Press Enter to return to Main Menu...[/]")
-            sys.stdin.readline()
+        with CONSOLE.screen():
+            # Run action inside a new Alternate Screen Buffer so it leaves zero residue
+            action()
+            if os.name == 'nt':
+                import msvcrt
+                CONSOLE.print("\n[dim italic]Press any key to return to Main Menu...[/]", justify="center")
+                # Wait for any key, discard it
+                msvcrt.getch()
+                if msvcrt.kbhit(): # consume extra bytes for arrows
+                    msvcrt.getch()
+            else:
+                import sys
+                CONSOLE.print("\n[dim italic]Press Enter to return to Main Menu...[/]", justify="center")
+                sys.stdin.readline()
             
         do_tui()
+
 
