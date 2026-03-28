@@ -19,16 +19,6 @@ classifiers = [
     "Programming Language :: Python :: 3.12",
     "Topic :: Software Development :: Libraries",
 ]
-
-[project.urls]
-Homepage = "https://github.com/ErickGuerron/MCP-Context-Life"
-Repository = "https://github.com/ErickGuerron/MCP-Context-Life"
-Issues = "https://github.com/ErickGuerron/MCP-Context-Life/issues"
-
-# CLI entry point — after pip install, users can run `context-life` directly
-[project.scripts]
-context-life = "mmcp.__main__:main"
-
 dependencies = [
     "mcp[cli]>=1.0.0",
     "tiktoken>=0.7.0",
@@ -36,6 +26,14 @@ dependencies = [
     "sentence-transformers>=2.2.0",
     "pyarrow>=14.0.0",
 ]
+
+[project.urls]
+Homepage = "https://github.com/ErickGuerron/MCP-Context-Life"
+Repository = "https://github.com/ErickGuerron/MCP-Context-Life"
+Issues = "https://github.com/ErickGuerron/MCP-Context-Life/issues"
+
+[project.scripts]
+context-life = "mmcp.__main__:main"
 
 [project.optional-dependencies]
 dev = [
