@@ -401,11 +401,11 @@ class RAGEngine:
         table = self._get_or_create_table()
 
         try:
-            results = (
+            rows = (
                 table.search(query)
                 .metric("cosine")
                 .limit(top_k)
-                .to_pandas()
+                .to_list()
             )
         except Exception:
             return []
@@ -414,7 +414,7 @@ class RAGEngine:
         source_counts: dict[str, int] = {}  # P6: track per-source chunks
         running_tokens = 0  # P4: track token consumption
 
-        for _, row in results.iterrows():
+        for row in rows:
             text = row.get("text", "")
             source = row.get("source", "unknown")
             score = float(row.get("_distance", 0.0))
@@ -429,14 +429,17 @@ class RAGEngine:
                 current_count = source_counts.get(source, 0)
                 if current_count >= max_chunks_per_source:
                     continue
-                source_counts[source] = current_count + 1
 
-            # P4: Check token budget before adding
+            # P4: Check token budget before adding (skip-and-continue)
             if max_tokens > 0:
                 chunk_tokens = count_tokens(text, encoding)
                 if running_tokens + chunk_tokens > max_tokens:
-                    break  # Stop — we've hit the budget
+                    continue  # Skip this chunk, try smaller ones
                 running_tokens += chunk_tokens
+
+            # Track source count AFTER budget check passes
+            if max_chunks_per_source > 0:
+                source_counts[source] = source_counts.get(source, 0) + 1
 
             search_results.append(
                 SearchResult(

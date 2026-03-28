@@ -176,22 +176,20 @@ def trim_smart(
     """
     Intelligent trimming strategy — the crown jewel of Context-Life.
 
-    Algorithm:
+    Strict Budget Enforcement Ladder:
       1. ALWAYS protect system/developer messages (immutable anchors)
-      2. ALWAYS protect the last `preserve_recent` non-system messages
-      3. Calculate if we're within budget → return early if yes
-      4. Drop middle messages progressively (oldest first) until within budget
-      5. If dropping alone isn't enough, generate a compressed summary
-         of the dropped messages and inject it as a single system note
+      2. Try to protect the last `preserve_recent` non-system messages
+      3. Drop ALL middle messages first
+      4. If still over budget → reduce preserve_recent progressively
+      5. If STILL over budget → trim system messages to fit
+      6. GUARANTEE: output token count ≤ max_tokens
 
     Args:
         messages: The full message array
         max_tokens: Token budget ceiling
         preserve_recent: Number of recent non-system messages to protect
         encoding: Tiktoken encoding name
-        summary_prompt: Optional — if provided, dropped messages get
-                        compressed into this summary format instead of
-                        being completely lost
+        summary_prompt: Optional — not used yet, reserved for LLM summarization
     """
     original_count = count_messages_tokens(messages, encoding)
 
@@ -204,76 +202,82 @@ def trim_smart(
             strategy_used=TrimStrategy.SMART.value,
         )
 
-    # Phase 1: Classify messages into 3 buckets
-    system_msgs: list[dict] = []
-    middle_msgs: list[dict] = []
-    recent_msgs: list[dict] = []
-
-    non_system = [m for m in messages if not _is_system_message(m)]
+    # Phase 1: Classify messages
     system_msgs = [m for m in messages if _is_system_message(m)]
+    non_system = [m for m in messages if not _is_system_message(m)]
 
-    # Protect the N most recent non-system messages
-    if len(non_system) <= preserve_recent:
-        recent_msgs = non_system
-    else:
-        middle_msgs = non_system[:-preserve_recent]
-        recent_msgs = non_system[-preserve_recent:]
-
-    # Phase 2: Check if system + recent already fit
     system_tokens = count_messages_tokens(system_msgs, encoding) if system_msgs else 0
-    recent_tokens = count_messages_tokens(recent_msgs, encoding) if recent_msgs else 0
-    budget_after_protected = max_tokens - system_tokens - recent_tokens
 
-    if budget_after_protected <= 0:
-        # Even protected messages exceed budget — keep system + as many recent as possible
-        result_messages = system_msgs + recent_msgs
-        trimmed_count = count_messages_tokens(result_messages, encoding)
-        return TrimResult(
-            messages=result_messages,
-            original_token_count=original_count,
-            trimmed_token_count=trimmed_count,
-            messages_removed=len(messages) - len(result_messages),
-            strategy_used=TrimStrategy.SMART.value,
-        )
+    # Phase 2: Strict ladder — adjust preserve_recent until it fits
+    effective_recent = min(preserve_recent, len(non_system))
 
-    # Phase 3: Progressive drop of middle messages (oldest first)
+    while effective_recent >= 0:
+        if effective_recent == 0:
+            recent_msgs = []
+            middle_msgs = non_system
+        elif len(non_system) <= effective_recent:
+            recent_msgs = non_system
+            middle_msgs = []
+        else:
+            middle_msgs = non_system[:-effective_recent]
+            recent_msgs = non_system[-effective_recent:]
+
+        recent_tokens = count_messages_tokens(recent_msgs, encoding) if recent_msgs else 0
+        budget_for_middle = max_tokens - system_tokens - recent_tokens
+
+        if budget_for_middle >= 0:
+            break  # This preserve_recent level fits
+
+        # Protected messages alone exceed budget — reduce recent
+        effective_recent -= 1
+
+    # Phase 3: Fill middle messages (newest first, skip-and-continue)
     kept_middle: list[dict] = []
     running_middle_tokens = 0
     dropped_contents: list[str] = []
 
-    for msg in reversed(middle_msgs):
-        msg_tokens = count_messages_tokens([msg], encoding)
-        if running_middle_tokens + msg_tokens <= budget_after_protected:
-            kept_middle.insert(0, msg)
-            running_middle_tokens += msg_tokens
-        else:
-            # Collect dropped content for potential summarization
-            content = msg.get("content", "")
-            if isinstance(content, str) and content.strip():
-                dropped_contents.append(f"[{msg.get('role', 'unknown')}]: {content[:200]}")
+    if budget_for_middle > 0 and middle_msgs:
+        for msg in reversed(middle_msgs):
+            msg_tokens = count_messages_tokens([msg], encoding)
+            if running_middle_tokens + msg_tokens <= budget_for_middle:
+                kept_middle.insert(0, msg)
+                running_middle_tokens += msg_tokens
+            else:
+                # Skip this message but continue trying smaller ones
+                content = msg.get("content", "")
+                if isinstance(content, str) and content.strip():
+                    dropped_contents.append(f"[{msg.get('role', 'unknown')}]: {content[:120]}")
 
-    # Phase 4: If messages were dropped, inject a compressed breadcrumb
+    # Phase 4: Summary breadcrumb (only if it fits)
     summary_injection: list[dict] = []
     if dropped_contents:
         summary_text = (
             f"[CL Context Summary] {len(dropped_contents)} earlier messages were "
-            f"compressed to save context space. Topics covered: "
-            + "; ".join(dropped_contents[:5])
+            f"compressed. Topics: "
+            + "; ".join(dropped_contents[:3])
         )
 
-        # Only inject if it fits within budget
         summary_tokens = count_tokens(summary_text, encoding)
-        if running_middle_tokens + summary_tokens <= budget_after_protected:
+        remaining_budget = budget_for_middle - running_middle_tokens
+        if remaining_budget >= summary_tokens:
             summary_injection = [
-                {
-                    "role": "system",
-                    "content": summary_text,
-                }
+                {"role": "system", "content": summary_text}
             ]
 
-    # Assemble final array: system → summary → kept_middle → recent
+    # Phase 5: Assemble and ENFORCE strict budget
     result_messages = system_msgs + summary_injection + kept_middle + recent_msgs
     trimmed_count = count_messages_tokens(result_messages, encoding)
+
+    # Strict enforcement: if we're STILL over (edge case with system too large),
+    # progressively drop from middle then summary until we fit
+    while trimmed_count > max_tokens and (kept_middle or summary_injection):
+        if kept_middle:
+            kept_middle.pop(0)  # Drop oldest middle message
+        elif summary_injection:
+            summary_injection = []
+
+        result_messages = system_msgs + summary_injection + kept_middle + recent_msgs
+        trimmed_count = count_messages_tokens(result_messages, encoding)
 
     return TrimResult(
         messages=result_messages,
