@@ -1,0 +1,250 @@
+name: Context-Life CI
+
+on:
+  push:
+    branches: [main, develop]
+    tags: ['v*']
+  pull_request:
+    branches: [main, develop]
+
+permissions:
+  contents: read
+
+jobs:
+  # ──────────────────────────────────────────────────
+  # Job 1: Lint & validate commits
+  # ──────────────────────────────────────────────────
+  lint:
+    name: "🔍 Lint & Commit Validation"
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install dev dependencies
+        run: pip install ruff
+
+      - name: Run Ruff linting
+        run: ruff check mmcp/ --output-format=github
+
+      - name: Check Ruff formatting
+        run: ruff format --check mmcp/
+
+      - name: Validate conventional commits
+        if: github.event_name == 'pull_request'
+        run: |
+          echo "Checking conventional commit format..."
+          git log --oneline origin/${{ github.base_ref }}..HEAD | while read -r line; do
+            if ! echo "$line" | grep -qE "^[a-f0-9]+ (feat|fix|docs|style|refactor|perf|test|build|ci|chore|revert)(\(.+\))?: .+"; then
+              echo "❌ Non-conventional commit: $line"
+              echo "Expected format: type(scope): description"
+              exit 1
+            fi
+          done
+          echo "✅ All commits follow conventional format"
+
+  # ──────────────────────────────────────────────────
+  # Job 2: Test installation on multiple Python versions
+  # ──────────────────────────────────────────────────
+  test-install:
+    name: "📦 Test Install (Python ${{ matrix.python-version }})"
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        python-version: ["3.10", "3.11", "3.12"]
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python ${{ matrix.python-version }}
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+
+      - name: Install context-life
+        run: pip install ".[rag]"
+
+      - name: Verify CLI entry point
+        run: context-life version
+
+      - name: Verify CLI help
+        run: context-life help
+
+      - name: Verify module import
+        run: python -c "from mmcp import __version__; print(f'v{__version__}')"
+
+      - name: Verify core tools import
+        run: |
+          python -c "
+          from mmcp.token_counter import count_tokens
+          print(f'Token count: {count_tokens(\"hello world\")}')
+          "
+
+      - name: Verify trim history import
+        run: |
+          python -c "
+          from mmcp.trim_history import trim_messages
+          result = trim_messages(
+              [{'role': 'user', 'content': 'test'}],
+              max_tokens=100,
+              strategy='smart'
+          )
+          print(f'Trimmed: {result.trimmed_token_count} tokens')
+          "
+
+      - name: Verify config module
+        run: |
+          python -c "
+          from mmcp.config import get_config
+          cfg = get_config()
+          print(f'Config loaded: budget={cfg.token_budget_default}')
+          "
+
+  # ──────────────────────────────────────────────────
+  # Job 3: Core profile install (minimal)
+  # ──────────────────────────────────────────────────
+  test-core-profile:
+    name: "📦 Test Core Profile"
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install core profile only
+        run: pip install ".[core]"
+
+      - name: Verify CLI works
+        run: context-life version
+
+      - name: Verify token counting
+        run: |
+          python -c "
+          from mmcp.token_counter import count_tokens
+          assert count_tokens('hello world') > 0
+          print('✅ Core profile works')
+          "
+
+  # ──────────────────────────────────────────────────
+  # Job 4: Docker build & test
+  # ──────────────────────────────────────────────────
+  docker:
+    name: "🐳 Docker Build & Verify"
+    runs-on: ubuntu-latest
+    needs: [lint]
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build Docker image
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          push: false
+          load: true
+          tags: context-life:test
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Verify CLI in container
+        run: |
+          docker run --rm context-life:test version
+          echo "✅ CLI works inside Docker"
+
+      - name: Run context-life info in container
+        run: |
+          docker run --rm context-life:test info
+          echo "✅ Info command works"
+
+      - name: Run context-life doctor in container
+        run: |
+          docker run --rm context-life:test doctor
+          echo "✅ Doctor command works"
+
+      - name: Verify module imports in container
+        run: |
+          docker run --rm --entrypoint python context-life:test -c "
+          from mmcp.token_counter import count_tokens
+          from mmcp.trim_history import trim_messages
+          from mmcp.config import get_config
+          print('✅ All imports OK')
+          print(f'Token count test: {count_tokens(\"hello world\")}')
+          cfg = get_config()
+          print(f'Config loaded: budget={cfg.token_budget_default}')
+          "
+
+  # ──────────────────────────────────────────────────
+  # Job 5: Install from GitHub URL (integration test)
+  # ──────────────────────────────────────────────────
+  test-github-install:
+    name: "🌐 Test GitHub Install"
+    runs-on: ubuntu-latest
+    needs: [lint]
+
+    steps:
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install from GitHub (current ref)
+        run: |
+          pip install "git+https://github.com/${{ github.repository }}.git@${{ github.sha }}"
+
+      - name: Verify installation
+        run: |
+          context-life version
+          context-life help
+          python -c "from mmcp import __version__; print(f'Installed: v{__version__}')"
+
+  # ──────────────────────────────────────────────────
+  # Job 6: Release (only on version tags)
+  # ──────────────────────────────────────────────────
+  release:
+    name: "🚀 Create Release"
+    runs-on: ubuntu-latest
+    needs: [lint, test-install, docker, test-github-install]
+    if: startsWith(github.ref, 'refs/tags/v')
+    permissions:
+      contents: write
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Extract version from tag
+        id: version
+        run: echo "VERSION=${GITHUB_REF#refs/tags/}" >> $GITHUB_OUTPUT
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ steps.version.outputs.VERSION }}
+          name: "Context-Life ${{ steps.version.outputs.VERSION }}"
+          body: |
+            ## Context-Life ${{ steps.version.outputs.VERSION }}
+
+            ### Install
+            ```bash
+            pip install git+https://github.com/${{ github.repository }}.git@${{ steps.version.outputs.VERSION }}
+            ```
+
+            ### Upgrade
+            ```bash
+            context-life upgrade
+            ```
+          draft: false
+          prerelease: false

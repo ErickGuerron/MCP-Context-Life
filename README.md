@@ -11,18 +11,100 @@
 pip install git+https://github.com/ErickGuerron/MCP-Context-Life.git
 ```
 
-This installs the `context-life` CLI command globally. Verify:
+### Install Profiles
 
 ```bash
-context-life --help
+# Full install (default — includes RAG)
+pip install "git+https://github.com/ErickGuerron/MCP-Context-Life.git"
+
+# Core only (token counting + trim, no ML dependencies)
+pip install "context-life[core]"
+
+# With RAG (LanceDB + sentence-transformers)
+pip install "context-life[rag]"
+
+# Development (testing + linting)
+pip install -e ".[dev]"
+
+# Everything
+pip install -e ".[all]"
+
+# Pinned to a specific version
+pip install "git+https://github.com/ErickGuerron/MCP-Context-Life.git@v0.3.0"
 ```
 
-### From source (for development)
+### Isolated install with pipx
+
+```bash
+pipx install "git+https://github.com/ErickGuerron/MCP-Context-Life.git"
+```
+
+### From source
 
 ```bash
 git clone https://github.com/ErickGuerron/MCP-Context-Life.git
 cd MCP-Context-Life
 pip install -e ".[dev]"
+```
+
+### Docker
+
+```bash
+docker build -t context-life .
+docker run --rm context-life version
+docker run --rm context-life info
+docker run --rm context-life doctor
+```
+
+## CLI Commands
+
+```bash
+context-life                           # Start MCP server (stdio)
+context-life serve                     # Start MCP server (stdio)
+context-life serve --http              # Start MCP server (HTTP)
+context-life info                      # System info, config, dependencies
+context-life doctor                    # Environment diagnostics
+context-life upgrade                   # Upgrade to latest GitHub release
+context-life upgrade --version v0.3.0  # Install specific version
+context-life upgrade --dry-run         # Check without installing
+context-life version                   # Show version
+context-life help                      # Show help
+```
+
+## Configuration
+
+Context-Life uses a three-tier configuration system:
+
+1. **Built-in defaults** — always available
+2. **Config file** — `~/.config/context-life/config.toml` (Linux/macOS) or `%APPDATA%\context-life\config.toml` (Windows)
+3. **Environment variables** — `CL_*` prefix (highest priority)
+
+### Config file example
+
+```toml
+[rag]
+top_k = 5
+min_score = 0.3
+max_chunks_per_source = 3
+chunk_size = 512
+
+[token_budget]
+default = 128000
+safety_buffer = 500
+
+[trim]
+preserve_recent = 6
+
+[paths]
+data_dir = "~/.local/share/context-life"
+```
+
+### Environment variables
+
+```bash
+export CL_RAG_TOP_K=10
+export CL_TOKEN_BUDGET_DEFAULT=64000
+export CL_DATA_DIR=/custom/path
 ```
 
 ## Setup with MCP Clients
@@ -61,7 +143,7 @@ Edit `claude_desktop_config.json`:
 }
 ```
 
-### Cursor / Windsurf
+### Cursor / Windsurf / Gemini CLI
 
 ```json
 {
@@ -70,26 +152,6 @@ Edit `claude_desktop_config.json`:
       "command": "context-life"
     }
   }
-}
-```
-
-### Gemini CLI / Antigravity
-
-```json
-{
-  "mcpServers": {
-    "context-life": {
-      "command": "context-life"
-    }
-  }
-}
-```
-
-### Running from source (without install)
-
-```json
-{
-  "command": ["python", "-m", "mmcp"]
 }
 ```
 
@@ -102,7 +164,7 @@ Edit `claude_desktop_config.json`:
 | Trim History | `optimize_messages` | Trim message arrays using tail/head/smart strategies |
 | RAG Search | `search_context` | Semantic search over indexed local knowledge |
 | Index Files | `index_knowledge` | Index local files into LanceDB for RAG retrieval |
-| Cache Context | `cache_context` | Cache-aware message processing for provider caching |
+| Cache Context | `cache_context` | Cache-aware message processing with segmented prefixes |
 | RAG Stats | `rag_stats` | Knowledge base statistics |
 | Clear Knowledge | `clear_knowledge` | Clear all indexed knowledge |
 | Reset Budget | `reset_token_budget` | Reset token budget tracker |
@@ -121,14 +183,18 @@ Edit `claude_desktop_config.json`:
 ┌─────────────────▼────────────────────────┐
 │           Context-Life Server            │
 │  ┌─────────────┐  ┌───────────────────┐  │
-│  │ Token       │  │ Trim History      │  │
-│  │ Counter     │  │ (tail/head/smart) │  │
-│  │ (tiktoken)  │  │                   │  │
+│  │ Config      │  │ Token Counter     │  │
+│  │ (3-tier)    │  │ (tiktoken)        │  │
 │  └─────────────┘  └───────────────────┘  │
 │  ┌─────────────┐  ┌───────────────────┐  │
-│  │ RAG Engine  │  │ Cache Manager     │  │
-│  │ (LanceDB + │  │ (Store + Loop +   │  │
-│  │  MiniLM)    │  │  Canonical Hash)  │  │
+│  │ Trim History│  │ Cache Manager     │  │
+│  │ (tail/head/ │  │ (2-level prefix   │  │
+│  │  smart)     │  │  segmentation)    │  │
+│  └─────────────┘  └───────────────────┘  │
+│  ┌─────────────┐  ┌───────────────────┐  │
+│  │ RAG Engine  │  │ CLI (Rich TUI)    │  │
+│  │ (LanceDB +  │  │ (info/doctor/     │  │
+│  │  MiniLM)    │  │  upgrade/version) │  │
 │  └─────────────┘  └───────────────────┘  │
 └──────────────────────────────────────────┘
 ```
@@ -139,32 +205,34 @@ Edit `claude_desktop_config.json`:
 Uses `tiktoken` for exact token counting. Supports `cl100k_base` (GPT-4, Claude), `o200k_base` (GPT-4o), and `p50k_base` (Codex).
 
 ### Trim History
-Three strategies to reduce message history:
+Three strategies with **strict budget guarantee**:
 - **tail**: Keep the most recent messages
 - **head**: Keep the oldest messages
-- **smart**: Protect system messages + recent turns, compress the middle
+- **smart**: Protect system messages + recent turns, compress the middle. If anchors exceed budget, compacts into a policy digest.
 
 ### RAG Engine
 Local vector search using **LanceDB** (serverless) + **paraphrase-multilingual-MiniLM-L12-v2** (multilingual embeddings).
 - Automatic deduplication by file hash
-- Token-budgeted retrieval (`max_tokens`)
+- Token-budgeted retrieval with skip-and-continue packing
 - Per-source chunk limits (`max_chunks_per_source`)
 - Score filtering (`min_score`)
 
 ### Cache Manager
-Detects when the static prefix (system prompt + RAG context) hasn't changed between turns, enabling provider-level prompt caching (Anthropic/Google/OpenAI save up to 90% on cached prefixes).
-- Canonical prefix hashing (ignores whitespace differences)
-- Real tiktoken metrics (not estimates)
-- Clean messages (no internal metadata injected)
+Two-level prefix segmentation for optimal cache reuse:
+- **Base prefix**: system/developer instructions (stable across turns)
+- **RAG prefix**: injected knowledge context (may change)
+- When only RAG changes, base prefix cache is preserved
+- Canonical hashing (ignores whitespace differences)
+- Real tiktoken metrics
 
 ## Development
 
 ```bash
 # Run with HTTP transport for testing
-context-life --transport http
+context-life serve --http
 
 # Or from source
-python -m mmcp --transport http
+python -m mmcp serve --http
 
 # Lint
 ruff check mmcp/

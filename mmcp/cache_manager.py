@@ -195,6 +195,7 @@ class CacheLoop:
     def __init__(self, encoding: str = DEFAULT_ENCODING):
         self._store = CacheStore()
         self._last_static_hash: Optional[str] = None
+        self._last_base_hash: Optional[str] = None
         self._encoding = encoding
 
     def process_messages(
@@ -231,37 +232,51 @@ class CacheLoop:
             else:
                 dynamic_messages.append(msg)
 
-        # Phase 2: Inject RAG context into static prefix if provided
+        # Phase 2: Build base prefix (system/developer only — NO RAG)
+        base_content = json.dumps(static_messages, sort_keys=True)
+        base_token_count = count_tokens(base_content, self._encoding)
+        _, base_hash = self._store.lookup(base_content)
+
+        # Phase 3: Inject RAG context if provided
+        rag_hash = None
+        rag_token_count = 0
         if rag_context:
             rag_message = {
                 "role": "system",
                 "content": f"[CL Knowledge Context]\n{rag_context}",
             }
             static_messages.append(rag_message)
+            rag_content = json.dumps([rag_message], sort_keys=True)
+            rag_token_count = count_tokens(rag_content, self._encoding)
+            _, rag_hash = self._store.lookup(rag_content)
 
-        # Phase 3: P1 — Count static prefix tokens with REAL tiktoken
-        static_content = json.dumps(static_messages, sort_keys=True)
-        static_token_count = count_tokens(static_content, self._encoding)
+        # Phase 4: P1 — Count full static prefix tokens with REAL tiktoken
+        full_static_content = json.dumps(static_messages, sort_keys=True)
+        static_token_count = count_tokens(full_static_content, self._encoding)
 
-        # Phase 4: P5 — Hash with canonical normalization
-        is_cached, content_hash = self._store.lookup(static_content)
+        # Phase 5: P5 — Full prefix hash for overall cache hit detection
+        is_cached, content_hash = self._store.lookup(full_static_content)
 
         if not is_cached:
-            self._store.store(static_content, static_token_count)
+            self._store.store(full_static_content, static_token_count)
 
-        # Phase 5: Detect cache hit (same prefix as last turn)
-        cache_hit = content_hash == self._last_static_hash
+        # Phase 6: Detect cache hits (segmented)
+        full_cache_hit = content_hash == self._last_static_hash
+        base_cache_hit = base_hash == self._last_base_hash
+
         self._last_static_hash = content_hash
+        self._last_base_hash = base_hash
 
         # P1: Real token savings tracking
-        if cache_hit:
+        if full_cache_hit:
             self._store.stats.tokens_saved += static_token_count
+        elif base_cache_hit:
+            # Partial reuse — base prompt was cached even though RAG changed
+            self._store.stats.tokens_saved += base_token_count
 
-        # Phase 6: P2 — Return CLEAN messages, NO internal metadata injected
-        # Cache info stays in the separate 'cache_metadata' field
+        # Phase 7: P2 — Return CLEAN messages, NO internal metadata injected
         optimized_messages = static_messages + dynamic_messages
 
-        # Count total tokens for the full optimized payload
         total_token_count = count_tokens(
             json.dumps(optimized_messages, sort_keys=True), self._encoding
         )
@@ -270,10 +285,15 @@ class CacheLoop:
             "messages": optimized_messages,
             "cache_metadata": {
                 "static_prefix_hash": content_hash,
-                "is_cache_hit": cache_hit,
+                "base_prefix_hash": base_hash,
+                "rag_prefix_hash": rag_hash,
+                "is_cache_hit": full_cache_hit,
+                "is_base_cache_hit": base_cache_hit,
                 "cache_eligible": True,
                 "static_messages_count": len(static_messages),
                 "dynamic_messages_count": len(dynamic_messages),
+                "base_prefix_tokens": base_token_count,
+                "rag_prefix_tokens": rag_token_count,
                 "static_prefix_tokens": static_token_count,
                 "total_tokens": total_token_count,
             },
@@ -288,3 +308,4 @@ class CacheLoop:
         """Reset cache state."""
         self._store.clear()
         self._last_static_hash = None
+        self._last_base_hash = None
