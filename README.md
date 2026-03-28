@@ -49,7 +49,7 @@ pipx install "context-life[core]"
 pipx install "context-life[rag]"
 
 # Pinned to a specific version
-pipx install "git+https://github.com/ErickGuerron/MCP-Context-Life.git@v0.4.0"
+pipx install "git+https://github.com/ErickGuerron/MCP-Context-Life.git@v0.4.1"
 ```
 
 ### From source (for development)
@@ -78,7 +78,7 @@ context-life serve --http              # Start MCP server (HTTP)
 context-life info                      # System info, config, dependencies
 context-life doctor                    # Environment diagnostics
 context-life upgrade                   # Upgrade to latest GitHub release
-context-life upgrade --version v0.4.0  # Install specific version
+context-life upgrade --version v0.4.1  # Install specific version
 context-life upgrade --dry-run         # Check without installing
 context-life version                   # Show version
 context-life help                      # Show help
