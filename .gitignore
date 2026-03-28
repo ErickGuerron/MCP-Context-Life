@@ -1,0 +1,56 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+*.egg
+*.egg-info/
+dist/
+build/
+eggs/
+*.whl
+
+# Virtualenvs
+.venv/
+venv/
+ENV/
+env/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.project
+.classpath
+
+# OS
+.DS_Store
+Thumbs.db
+Desktop.ini
+
+# LanceDB local data (user-specific, not project data)
+.mmcp/
+
+# Ruff cache
+.ruff_cache/
+
+# pytest
+.pytest_cache/
+htmlcov/
+.coverage
+
+# Sentence-transformers model cache (downloaded per-user)
+.cache/
+
+# Jupyter
+.ipynb_checkpoints/
+
+# Distribution / packaging
+*.tar.gz
+*.zip
+
+# Internal docs and benchmarks (not public)
+docs/
+benchmarks/

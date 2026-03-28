@@ -1,0 +1,58 @@
+[project]
+name = "context-life"
+version = "0.1.0"
+description = "Context-Life (CL) — LLM context optimization MCP server with local RAG, trim history, token counting, and prompt caching."
+readme = "README.md"
+requires-python = ">=3.10"
+license = {text = "MIT"}
+authors = [
+    {name = "Erick Guerron"}
+]
+keywords = ["mcp", "llm", "context", "optimization", "rag", "tokens", "context-life"]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Topic :: Software Development :: Libraries",
+]
+
+[project.urls]
+Homepage = "https://github.com/ErickGuerron/MCP-Context-Life"
+Repository = "https://github.com/ErickGuerron/MCP-Context-Life"
+Issues = "https://github.com/ErickGuerron/MCP-Context-Life/issues"
+
+# CLI entry point — after pip install, users can run `context-life` directly
+[project.scripts]
+context-life = "mmcp.__main__:main"
+
+dependencies = [
+    "mcp[cli]>=1.0.0",
+    "tiktoken>=0.7.0",
+    "lancedb>=0.6.0",
+    "sentence-transformers>=2.2.0",
+    "pyarrow>=14.0.0",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8.0",
+    "ruff>=0.4.0",
+]
+
+[build-system]
+requires = ["setuptools>=68.0"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+include = ["mmcp*"]
+
+[tool.ruff]
+line-length = 120
+target-version = "py310"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "W"]
