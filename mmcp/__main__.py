@@ -5,8 +5,11 @@ Entry point with subcommands:
     context-life              → start MCP server (stdio)
     context-life serve        → start MCP server (stdio)
     context-life serve --http → start MCP server (HTTP)
-    context-life info         → show system info
-    context-life upgrade      → self-update from GitHub
+    context-life info         → show system info + config
+    context-life doctor       → run environment diagnostics
+    context-life upgrade      → upgrade to latest GitHub release
+    context-life upgrade --version <tag> → install specific version
+    context-life upgrade --dry-run      → check without installing
     context-life version      → show version
     context-life help         → show help
     python -m mmcp            → from source (same behavior)
@@ -37,15 +40,28 @@ def main():
         from mmcp.cli import show_info
         show_info()
 
+    elif command == "doctor":
+        from mmcp.cli import do_doctor
+        do_doctor()
+
     elif command == "upgrade":
         from mmcp.cli import do_upgrade
-        do_upgrade()
+        # Parse upgrade flags
+        target_version = None
+        dry_run = "--dry-run" in args
 
-    elif command == "version" or command == "--version" or command == "-v":
+        if "--version" in args:
+            idx = args.index("--version")
+            if idx + 1 < len(args):
+                target_version = args[idx + 1]
+
+        do_upgrade(target_version=target_version, dry_run=dry_run)
+
+    elif command in ("version", "--version", "-v"):
         from mmcp.cli import show_version
         show_version()
 
-    elif command == "help" or command == "--help" or command == "-h":
+    elif command in ("help", "--help", "-h"):
         from mmcp.cli import show_help
         show_help()
 

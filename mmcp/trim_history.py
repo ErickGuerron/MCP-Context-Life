@@ -268,15 +268,42 @@ def trim_smart(
     result_messages = system_msgs + summary_injection + kept_middle + recent_msgs
     trimmed_count = count_messages_tokens(result_messages, encoding)
 
-    # Strict enforcement: if we're STILL over (edge case with system too large),
-    # progressively drop from middle then summary until we fit
+    # Strict enforcement pass 1: drop middle and summary
     while trimmed_count > max_tokens and (kept_middle or summary_injection):
         if kept_middle:
-            kept_middle.pop(0)  # Drop oldest middle message
+            kept_middle.pop(0)
         elif summary_injection:
             summary_injection = []
 
         result_messages = system_msgs + summary_injection + kept_middle + recent_msgs
+        trimmed_count = count_messages_tokens(result_messages, encoding)
+
+    # Strict enforcement pass 2: drop recent messages one by one
+    while trimmed_count > max_tokens and recent_msgs:
+        recent_msgs.pop(0)
+        result_messages = system_msgs + recent_msgs
+        trimmed_count = count_messages_tokens(result_messages, encoding)
+
+    # Strict enforcement pass 3: oversized system anchors — compact into digest
+    if trimmed_count > max_tokens and system_msgs:
+        # Build a compressed policy digest from all system messages
+        digest_parts: list[str] = []
+        for msg in system_msgs:
+            content = msg.get("content", "")
+            if isinstance(content, str) and content.strip():
+                # Take first N chars of each system message
+                digest_parts.append(content[:200])
+
+        digest_text = (
+            "[CL System Digest — original system instructions were compressed to fit budget]\n"
+            + "\n---\n".join(digest_parts)
+        )
+
+        # Iteratively truncate digest until it fits
+        while count_tokens(digest_text, encoding) > max_tokens - 10 and len(digest_text) > 100:
+            digest_text = digest_text[: len(digest_text) * 3 // 4]
+
+        result_messages = [{"role": "system", "content": digest_text}]
         trimmed_count = count_messages_tokens(result_messages, encoding)
 
     return TrimResult(
