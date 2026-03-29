@@ -313,7 +313,7 @@ class CacheLoop:
             json.dumps(optimized_messages, sort_keys=True), self._encoding
         )
 
-        return {
+        result = {
             "messages": optimized_messages,
             "cache_metadata": {
                 "static_prefix_hash": content_hash,
@@ -331,6 +331,34 @@ class CacheLoop:
             },
             "stats": self._store.get_stats(),
         }
+
+        # RFC-002 Phase 3: Advisor hints when orchestrator is detected
+        from mmcp.orchestrator_detector import get_orchestrator_info
+
+        orchestrator = get_orchestrator_info()
+        if orchestrator.advisor_mode:
+            # Compute advisor hints based on token usage patterns
+            dynamic_token_count = total_token_count - static_token_count
+            dynamic_ratio = (
+                round(dynamic_token_count / max(1, total_token_count), 2)
+            )
+
+            result["advisor_hints"] = {
+                "orchestrator": orchestrator.orchestrator_name,
+                "should_trim_now": dynamic_ratio > 0.7,
+                "suggested_strategy": (
+                    "smart" if dynamic_ratio > 0.7 else "tail"
+                ),
+                "prefix_stable": full_cache_hit,
+                "dynamic_token_ratio": dynamic_ratio,
+                "recommendation": (
+                    "Static prefix is stable — cache savings active."
+                    if full_cache_hit
+                    else "Static prefix changed — cache miss expected this turn."
+                ),
+            }
+
+        return result
 
     def get_stats(self) -> dict:
         """Get cache performance statistics."""
