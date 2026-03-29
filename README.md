@@ -1,36 +1,62 @@
-# Context-Life (CL) — LLM Context Optimization MCP Server
+<p align="center">
+  <img src="img/contexty.png" alt="Contexty — Context-Life Mascot" width="480" />
+</p>
 
-> MCP server for LLM context optimization with local RAG, intelligent trim history, token counting, and prompt caching.
-> Zero API calls — everything runs locally on your machine.
+<h1 align="center">Context-Life (CL)</h1>
 
-## Install
+<p align="center">
+  <strong>LLM Context Optimization MCP Server</strong><br/>
+  <em>Local RAG · Intelligent Trim · Token Counting · Prompt Caching · Context Health</em>
+</p>
+
+<p align="center">
+  <a href="https://github.com/ErickGuerron/MCP-Context-Life/releases"><img src="https://img.shields.io/badge/version-0.5.0-blue?style=flat-square" alt="Version" /></a>
+  <a href="https://www.python.org/downloads/"><img src="https://img.shields.io/badge/python-%3E%3D3.10-brightgreen?style=flat-square" alt="Python" /></a>
+  <a href="LICENSE.md"><img src="https://img.shields.io/badge/license-MIT-green?style=flat-square" alt="License" /></a>
+  <a href="https://modelcontextprotocol.io"><img src="https://img.shields.io/badge/protocol-MCP-purple?style=flat-square" alt="MCP" /></a>
+</p>
+
+<p align="center">
+  Zero API calls — everything runs locally on your machine.
+</p>
+
+---
+
+## ✨ What is Context-Life?
+
+Context-Life is an **MCP server** that optimizes how LLMs use their context window. Think of **Contexty** (our mascot) as a little helper that sits between your AI client and the model, making sure every token counts.
+
+- 🔢 **Token Counting** — Exact counts using tiktoken with LRU caching
+- ✂️ **Smart Trimming** — Intelligent message array optimization that never drops system instructions
+- 🔍 **Local RAG** — Semantic search over your files using LanceDB + multilingual embeddings
+- 💾 **Prompt Caching** — Two-level prefix segmentation for maximum cache reuse
+- 🏥 **Context Health** — Real-time health score (0-100) with actionable recommendations
+- 🤖 **Orchestrator Detection** — Auto-detects Gentle AI, Engram, and MCP orchestrators
+
+---
+
+## 🚀 Install
 
 ### Using uv (Fastest & Recommended)
 
-`uv` is an extremely fast Python package installer that seamlessly manages isolated CLI tools across Windows, macOS, and Linux without affecting your system Python environment.
-
-If you don't have `uv` installed, get it first:
-- **Windows:** `powershell -ExecutionPolicy ByPass -c "irm https://astral.sh/uv/install.ps1 | iex"`
-- **macOS / Linux:** `curl -LsSf https://astral.sh/uv/install.sh | sh`
-
-Once installed, simply run:
 ```bash
 uv tool install "git+https://github.com/ErickGuerron/MCP-Context-Life.git"
 ```
 
-### Using pipx (Standard isolated install)
+<details>
+<summary>Don't have <code>uv</code>? Install it first</summary>
 
-Like `uv`, `pipx` installs the tool in an isolated sandbox, avoiding dependency conflicts.
+- **Windows:** `powershell -ExecutionPolicy ByPass -c "irm https://astral.sh/uv/install.ps1 | iex"`
+- **macOS / Linux:** `curl -LsSf https://astral.sh/uv/install.sh | sh`
+</details>
+
+### Using pipx
 
 ```bash
 pipx install "git+https://github.com/ErickGuerron/MCP-Context-Life.git"
 ```
 
-### Note for Windows Users
-> [!WARNING]
-> Windows locks running `.exe` files. If you get a `[WinError 32]` when trying to upgrade or reinstall, it means the `context-life` server is currently running. **You must close your MCP client (OpenCode, Claude Desktop, Cursor, etc.) or stop any running terminal instances of context-life before running an upgrade command.**
-
-### Standard pip (For Virtual Environments)
+### Standard pip
 
 ```bash
 pip install git+https://github.com/ErickGuerron/MCP-Context-Life.git
@@ -40,19 +66,19 @@ pip install git+https://github.com/ErickGuerron/MCP-Context-Life.git
 
 ```bash
 # Full install (default — includes RAG)
-pipx install "git+https://github.com/ErickGuerron/MCP-Context-Life.git"
+uv tool install "git+https://github.com/ErickGuerron/MCP-Context-Life.git"
 
 # Core only (token counting + trim, no ML dependencies)
-pipx install "context-life[core]"
+pip install "context-life[core]"
 
 # With RAG (LanceDB + sentence-transformers)
-pipx install "context-life[rag]"
+pip install "context-life[rag]"
 
 # Pinned to a specific version
-pipx install "git+https://github.com/ErickGuerron/MCP-Context-Life.git@v0.4.1"
+uv tool install "git+https://github.com/ErickGuerron/MCP-Context-Life.git@v0.5.0"
 ```
 
-### From source (for development)
+### From Source
 
 ```bash
 git clone https://github.com/ErickGuerron/MCP-Context-Life.git
@@ -69,7 +95,12 @@ docker run --rm context-life info
 docker run --rm context-life doctor
 ```
 
-## CLI Commands
+> [!WARNING]
+> **Windows Users:** Windows locks running `.exe` files. If you get `[WinError 32]` during upgrade, close your MCP client first (OpenCode, Claude Desktop, Cursor, etc.).
+
+---
+
+## ⌨️ CLI Commands
 
 ```bash
 context-life                           # Start MCP server (stdio)
@@ -78,53 +109,19 @@ context-life serve --http              # Start MCP server (HTTP)
 context-life info                      # System info, config, dependencies
 context-life doctor                    # Environment diagnostics
 context-life upgrade                   # Upgrade to latest GitHub release
-context-life upgrade --version v0.4.1  # Install specific version
+context-life upgrade --version v0.5.0  # Install specific version
 context-life upgrade --dry-run         # Check without installing
 context-life version                   # Show version
 context-life help                      # Show help
 ```
 
-## Configuration
+---
 
-Context-Life uses a three-tier configuration system:
-
-1. **Built-in defaults** — always available
-2. **Config file** — `~/.config/context-life/config.toml` (Linux/macOS) or `%APPDATA%\context-life\config.toml` (Windows)
-3. **Environment variables** — `CL_*` prefix (highest priority)
-
-### Config file example
-
-```toml
-[rag]
-top_k = 5
-min_score = 0.3
-max_chunks_per_source = 3
-chunk_size = 512
-
-[token_budget]
-default = 128000
-safety_buffer = 500
-
-[trim]
-preserve_recent = 6
-
-[paths]
-data_dir = "~/.local/share/context-life"
-```
-
-### Environment variables
-
-```bash
-export CL_RAG_TOP_K=10
-export CL_TOKEN_BUDGET_DEFAULT=64000
-export CL_DATA_DIR=/custom/path
-```
-
-## Setup with MCP Clients
+## 🔧 Setup with MCP Clients
 
 ### OpenCode
 
-Add to your `~/.config/opencode/opencode.json`:
+Add to `~/.config/opencode/opencode.json`:
 
 ```json
 {
@@ -168,54 +165,75 @@ Edit `claude_desktop_config.json`:
 }
 ```
 
-## Features
+---
 
-| Feature | Tool / Resource | Description |
-|---------|----------------|-------------|
-| Token Counter | `count_tokens_tool` | Count tokens for any text using tiktoken |
-| Messages Counter | `count_messages_tokens_tool` | Count tokens for OpenAI-style message arrays |
-| Trim History | `optimize_messages` | Trim message arrays using tail/head/smart strategies |
-| RAG Search | `search_context` | Semantic search over indexed local knowledge |
-| Index Files | `index_knowledge` | Index local files into LanceDB for RAG retrieval |
-| Cache Context | `cache_context` | Cache-aware message processing with segmented prefixes |
-| RAG Stats | `rag_stats` | Knowledge base statistics |
-| Clear Knowledge | `clear_knowledge` | Clear all indexed knowledge |
-| Reset Budget | `reset_token_budget` | Reset token budget tracker |
-| Token Budget | `status://token_budget` | Check current token budget consumption |
-| Cache Status | `cache://status` | View prompt cache hit/miss stats |
-| RAG Stats | `rag://stats` | RAG knowledge base info |
+## 🧰 Features
 
-## Architecture
+### Tools
+
+| Tool | Description |
+|------|-------------|
+| `count_tokens_tool` | Count tokens for any text using tiktoken |
+| `count_messages_tokens_tool` | Count tokens for OpenAI-style message arrays |
+| `optimize_messages` | Trim message arrays using tail/head/smart strategies |
+| `search_context` | Semantic search over indexed local knowledge |
+| `index_knowledge` | Index local files into LanceDB for RAG retrieval |
+| `cache_context` | Cache-aware message processing with segmented prefixes |
+| `rag_stats` | Knowledge base statistics |
+| `clear_knowledge` | Clear all indexed knowledge |
+| `reset_token_budget` | Reset token budget tracker |
+| `analyze_context_health_tool` | 🆕 Context health analysis with score, metrics & recommendations |
+
+### Resources
+
+| Resource | Description |
+|----------|-------------|
+| `status://token_budget` | Current token budget + LRU cache stats |
+| `cache://status` | Prompt cache hit/miss performance |
+| `rag://stats` | RAG knowledge base info |
+| `status://orchestrator` | 🆕 Detected orchestrator & advisor mode status |
+
+---
+
+## 🏗️ Architecture
 
 ```
-┌──────────────────────────────────────────┐
-│           MCP Client (LLM Host)          │
-│   (OpenCode / Claude / Cursor / etc)     │
-└─────────────────┬────────────────────────┘
-                  │ MCP Protocol (stdio)
-┌─────────────────▼────────────────────────┐
-│           Context-Life Server            │
-│  ┌─────────────┐  ┌───────────────────┐  │
-│  │ Config      │  │ Token Counter     │  │
-│  │ (3-tier)    │  │ (tiktoken)        │  │
-│  └─────────────┘  └───────────────────┘  │
-│  ┌─────────────┐  ┌───────────────────┐  │
-│  │ Trim History│  │ Cache Manager     │  │
-│  │ (tail/head/ │  │ (2-level prefix   │  │
-│  │  smart)     │  │  segmentation)    │  │
-│  └─────────────┘  └───────────────────┘  │
-│  ┌─────────────┐  ┌───────────────────┐  │
-│  │ RAG Engine  │  │ CLI (Rich TUI)    │  │
-│  │ (LanceDB +  │  │ (info/doctor/     │  │
-│  │  MiniLM)    │  │  upgrade/version) │  │
-│  └─────────────┘  └───────────────────┘  │
-└──────────────────────────────────────────┘
+┌──────────────────────────────────────────────────┐
+│            MCP Client (LLM Host)                 │
+│    (OpenCode / Claude / Cursor / Gemini CLI)     │
+└────────────────────┬─────────────────────────────┘
+                     │ MCP Protocol (stdio/http)
+┌────────────────────▼─────────────────────────────┐
+│              Context-Life Server                  │
+│                                                   │
+│  ┌──────────────┐  ┌──────────────────────────┐  │
+│  │ Config       │  │ Token Counter            │  │
+│  │ (3-tier)     │  │ (tiktoken + LRU cache)   │  │
+│  └──────────────┘  └──────────────────────────┘  │
+│  ┌──────────────┐  ┌──────────────────────────┐  │
+│  │ Trim History │  │ Cache Manager            │  │
+│  │ (tail/head/  │  │ (2-level prefix +        │  │
+│  │  smart)      │  │  advisor hints)          │  │
+│  └──────────────┘  └──────────────────────────┘  │
+│  ┌──────────────┐  ┌──────────────────────────┐  │
+│  │ RAG Engine   │  │ Context Health           │  │
+│  │ (LanceDB +   │  │ (score 0-100 +           │  │
+│  │  lazy load)  │  │  recommendations)        │  │
+│  └──────────────┘  └──────────────────────────┘  │
+│  ┌──────────────┐  ┌──────────────────────────┐  │
+│  │ Orchestrator │  │ CLI (Rich TUI)           │  │
+│  │ Detector     │  │ (info/doctor/upgrade/    │  │
+│  │ (auto-sense) │  │  version)                │  │
+│  └──────────────┘  └──────────────────────────┘  │
+└───────────────────────────────────────────────────┘
 ```
 
-## How It Works
+---
+
+## 📖 How It Works
 
 ### Token Counter
-Uses `tiktoken` for exact token counting. Supports `cl100k_base` (GPT-4, Claude), `o200k_base` (GPT-4o), and `p50k_base` (Codex).
+Uses `tiktoken` for exact token counting. Supports `cl100k_base` (GPT-4, Claude), `o200k_base` (GPT-4o), and `p50k_base` (Codex). **v0.5.0:** LRU cache (1024 entries) eliminates redundant counts during trim iterations.
 
 ### Trim History
 Three strategies with **strict budget guarantee**:
@@ -224,7 +242,7 @@ Three strategies with **strict budget guarantee**:
 - **smart**: Protect system messages + recent turns, compress the middle. If anchors exceed budget, compacts into a policy digest.
 
 ### RAG Engine
-Local vector search using **LanceDB** (serverless) + **paraphrase-multilingual-MiniLM-L12-v2** (multilingual embeddings).
+Local vector search using **LanceDB** (serverless) + **paraphrase-multilingual-MiniLM-L12-v2** (multilingual embeddings). **v0.5.0:** Lazy model loading eliminates cold start latency — the embedding model loads only on first use.
 - Automatic deduplication by file hash
 - Token-budgeted retrieval with skip-and-continue packing
 - Per-source chunk limits (`max_chunks_per_source`)
@@ -235,10 +253,64 @@ Two-level prefix segmentation for optimal cache reuse:
 - **Base prefix**: system/developer instructions (stable across turns)
 - **RAG prefix**: injected knowledge context (may change)
 - When only RAG changes, base prefix cache is preserved
-- Canonical hashing (ignores whitespace differences)
-- Real tiktoken metrics
+- **v0.5.0:** Advisor hints injected when an AI orchestrator is detected
 
-## Development
+### Context Health *(v0.5.0)*
+Real-time diagnostic tool that computes a health score (0-100) based on:
+- Token utilization (% of budget consumed)
+- Message redundancy (duplicate detection)
+- System-to-user ratio (prompt domination)
+- Noise estimation (trivial/empty messages)
+
+Returns actionable recommendations and orchestrator hints for proactive context management.
+
+### Orchestrator Detection *(v0.5.0)*
+Auto-detects when CL runs alongside AI orchestrators like Gentle AI or Engram:
+- **Environment variables**: `GENTLE_AI_ACTIVE`, `ENGRAM`, `MCP_ORCHESTRATOR`
+- **Workspace artifacts**: `.gemini/`, `.agent/`, `.agents/`
+- Enables "Advisor Mode" with proactive optimization hints
+
+---
+
+## ⚙️ Configuration
+
+Context-Life uses a three-tier configuration system:
+
+1. **Built-in defaults** — always available
+2. **Config file** — `~/.config/context-life/config.toml` (Linux/macOS) or `%APPDATA%\context-life\config.toml` (Windows)
+3. **Environment variables** — `CL_*` prefix (highest priority)
+
+### Config file example
+
+```toml
+[rag]
+top_k = 5
+min_score = 0.3
+max_chunks_per_source = 3
+chunk_size = 512
+
+[token_budget]
+default = 128000
+safety_buffer = 500
+
+[trim]
+preserve_recent = 6
+
+[paths]
+data_dir = "~/.local/share/context-life"
+```
+
+### Environment variables
+
+```bash
+export CL_RAG_TOP_K=10
+export CL_TOKEN_BUDGET_DEFAULT=64000
+export CL_DATA_DIR=/custom/path
+```
+
+---
+
+## 🧪 Development
 
 ```bash
 # Run with HTTP transport for testing
@@ -254,12 +326,20 @@ ruff check mmcp/
 pytest
 ```
 
-## Requirements
+---
+
+## 📋 Requirements
 
 - Python >= 3.10
 - ~500MB disk for sentence-transformers model (downloaded once on first use)
 - No GPU required — runs on CPU
 
-## License
+## 📄 License
 
 [MIT License](LICENSE.md)
+
+---
+
+<p align="center">
+  <sub>Built with ❤️ by <a href="https://github.com/ErickGuerron">Erick Guerrón</a></sub>
+</p>
