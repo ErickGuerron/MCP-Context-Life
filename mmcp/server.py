@@ -20,14 +20,20 @@ from typing import Optional
 from mcp.server.fastmcp import FastMCP
 
 from mmcp.cache_manager import CacheLoop
+from mmcp.orchestrator_detector import get_orchestrator_info, reset_detection
 from mmcp.rag_engine import RAGEngine
 from mmcp.token_counter import (
     DEFAULT_ENCODING,
     TokenBudget,
     count_messages_tokens,
     count_tokens,
+    get_cache_info,
 )
-from mmcp.trim_history import TrimStrategy, trim_messages
+from mmcp.trim_history import (
+    TrimStrategy,
+    analyze_context_health,
+    trim_messages,
+)
 
 # --- Server Instance ---
 mcp = FastMCP(
@@ -322,6 +328,43 @@ def reset_token_budget(
     return json.dumps(_token_budget.to_dict())
 
 
+@mcp.tool()
+def analyze_context_health_tool(
+    messages: str,
+    max_tokens: int = 128_000,
+    encoding: str = DEFAULT_ENCODING,
+) -> str:
+    """
+    RFC-002 P4: Analyze the health of a context window.
+
+    Provides a Health Score (0-100) with detailed metrics on:
+      - Token utilization (% of budget used)
+      - Message redundancy (duplicate detection)
+      - System-to-user ratio (prompt domination)
+      - Noise (trivial/empty messages)
+
+    Returns actionable recommendations and orchestrator hints
+    for proactive context management.
+
+    Args:
+        messages: JSON string of the messages array
+        max_tokens: Maximum token budget for the context window
+        encoding: Tiktoken encoding name
+
+    Returns:
+        JSON with health_score, metrics, recommendations, and orchestrator_hints
+    """
+    msgs = json.loads(messages)
+    report = analyze_context_health(msgs, max_tokens, encoding)
+
+    # RFC-002 P3: Include orchestrator info if detected
+    orchestrator = get_orchestrator_info()
+    result = report.to_dict()
+    result["orchestrator"] = orchestrator.to_dict()
+
+    return json.dumps(result)
+
+
 # ============================================================
 # RESOURCES
 # ============================================================
@@ -330,7 +373,9 @@ def reset_token_budget(
 @mcp.resource("status://token_budget")
 def token_budget_resource() -> str:
     """Current token budget status: consumed, remaining, usage percentage."""
-    return json.dumps(_token_budget.to_dict())
+    result = _token_budget.to_dict()
+    result["token_count_cache"] = get_cache_info()
+    return json.dumps(result)
 
 
 @mcp.resource("cache://status")
@@ -344,3 +389,9 @@ def rag_stats_resource() -> str:
     """RAG knowledge base statistics: total chunks, database info."""
     engine = _get_rag_engine()
     return json.dumps(engine.stats())
+
+
+@mcp.resource("status://orchestrator")
+def orchestrator_resource() -> str:
+    """RFC-002 P3: Detected orchestrator information and advisor mode status."""
+    return json.dumps(get_orchestrator_info().to_dict())

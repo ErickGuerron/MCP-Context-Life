@@ -2,4 +2,4 @@
 Context-Life (CL) — LLM Context Optimization MCP Server
 """
 
-__version__ = "0.4.1"
+__version__ = "0.5.0"

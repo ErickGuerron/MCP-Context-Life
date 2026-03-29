@@ -8,12 +8,17 @@ Implements 3 strategies for intelligent message array trimming:
 
 The smart strategy is the crown jewel — it NEVER touches system messages
 and intelligently decides what to drop vs. summarize.
+
+RFC-002 P4: analyze_context_health() — Diagnostic tool that provides a
+"Health Score" (0-100) for the current context window with actionable
+recommendations and orchestrator hints.
 """
 
 from __future__ import annotations
 
 import json
-from dataclasses import dataclass
+from collections import Counter
+from dataclasses import dataclass, field
 from enum import Enum
 from typing import Optional
 
@@ -342,3 +347,265 @@ def trim_messages(
         return trim_smart(messages, max_tokens, preserve_recent, encoding)
     else:
         raise ValueError(f"Unknown strategy: {strategy}")
+
+
+# ============================================================
+# RFC-002 P4: Context Health Analysis
+# ============================================================
+
+
+@dataclass
+class ContextHealthReport:
+    """RFC-002 P4: Diagnostic report for context window health."""
+
+    health_score: int  # 0-100
+    metrics: dict = field(default_factory=dict)
+    recommendations: list[str] = field(default_factory=list)
+    orchestrator_hints: dict = field(default_factory=dict)
+
+    def to_dict(self) -> dict:
+        return {
+            "health_score": self.health_score,
+            "metrics": self.metrics,
+            "recommendations": self.recommendations,
+            "orchestrator_hints": self.orchestrator_hints,
+        }
+
+
+def _compute_redundancy_ratio(messages: list[dict]) -> float:
+    """
+    Detect duplicate/near-duplicate messages by content hash.
+
+    Returns a ratio from 0.0 (no redundancy) to 1.0 (all duplicates).
+    """
+    if len(messages) <= 1:
+        return 0.0
+
+    content_hashes: list[str] = []
+    for msg in messages:
+        content = msg.get("content", "")
+        if isinstance(content, str):
+            # Normalize whitespace for comparison
+            normalized = " ".join(content.split()).strip().lower()
+            content_hashes.append(normalized)
+
+    if not content_hashes:
+        return 0.0
+
+    total = len(content_hashes)
+    unique = len(set(content_hashes))
+    duplicates = total - unique
+
+    return round(duplicates / total, 4) if total > 0 else 0.0
+
+
+def _compute_system_to_user_ratio(
+    messages: list[dict],
+    encoding: str = DEFAULT_ENCODING,
+) -> float:
+    """
+    Compute the ratio of system/developer tokens to total tokens.
+
+    High ratios (> 0.5) indicate the context is dominated by system
+    instructions, leaving little room for conversation history.
+    """
+    system_tokens = 0
+    total_tokens = 0
+
+    for msg in messages:
+        content = msg.get("content", "")
+        if isinstance(content, str):
+            tokens = count_tokens(content, encoding)
+        elif isinstance(content, (dict, list)):
+            tokens = count_tokens(json.dumps(content), encoding)
+        else:
+            tokens = 0
+
+        total_tokens += tokens
+        if _is_system_message(msg):
+            system_tokens += tokens
+
+    if total_tokens == 0:
+        return 0.0
+
+    return round(system_tokens / total_tokens, 4)
+
+
+def _estimate_noise(messages: list[dict]) -> str:
+    """
+    Estimate noise level based on message quality heuristics.
+
+    Noise indicators:
+      - Very short messages (< 5 chars)
+      - Empty content messages
+      - High ratio of single-word exchanges
+    """
+    if not messages:
+        return "low"
+
+    non_system = [m for m in messages if not _is_system_message(m)]
+    if not non_system:
+        return "low"
+
+    short_count = 0
+    empty_count = 0
+
+    for msg in non_system:
+        content = msg.get("content", "")
+        if isinstance(content, str):
+            stripped = content.strip()
+            if not stripped:
+                empty_count += 1
+            elif len(stripped) < 5:
+                short_count += 1
+
+    noise_ratio = (short_count + empty_count) / len(non_system)
+
+    if noise_ratio > 0.3:
+        return "high"
+    elif noise_ratio > 0.1:
+        return "med"
+    return "low"
+
+
+def analyze_context_health(
+    messages: list[dict],
+    max_tokens: int,
+    encoding: str = DEFAULT_ENCODING,
+) -> ContextHealthReport:
+    """
+    RFC-002 P4: Analyze the health of a context window.
+
+    Computes a health score (0-100) based on:
+      - Token utilization (are we close to the limit?)
+      - Redundancy (duplicate messages eating tokens)
+      - System-to-user ratio (is the system prompt dominating?)
+      - Noise (empty/trivial messages wasting space)
+
+    Returns actionable recommendations and orchestrator hints
+    for proactive context management.
+
+    Args:
+        messages: OpenAI-style message array
+        max_tokens: Maximum token budget for the context
+        encoding: Tiktoken encoding name
+
+    Returns:
+        ContextHealthReport with score, metrics, and recommendations
+    """
+    if not messages:
+        return ContextHealthReport(
+            health_score=100,
+            metrics={
+                "redundancy_ratio": 0.0,
+                "system_to_user_ratio": 0.0,
+                "noise_estimate": "low",
+                "token_usage_percent": 0.0,
+                "total_tokens": 0,
+                "message_count": 0,
+            },
+            recommendations=["Context is empty — no optimization needed."],
+            orchestrator_hints={
+                "should_trim_now": False,
+                "suggested_strategy": "smart",
+            },
+        )
+
+    # --- Compute metrics ---
+    total_tokens = count_messages_tokens(messages, encoding)
+    usage_percent = round((total_tokens / max_tokens) * 100, 2) if max_tokens > 0 else 0.0
+    redundancy = _compute_redundancy_ratio(messages)
+    sys_ratio = _compute_system_to_user_ratio(messages, encoding)
+    noise = _estimate_noise(messages)
+
+    # --- Compute health score (0-100) ---
+    score = 100
+
+    # Penalty: Token usage approaching limit
+    if usage_percent > 90:
+        score -= 40
+    elif usage_percent > 75:
+        score -= 25
+    elif usage_percent > 60:
+        score -= 10
+
+    # Penalty: Redundancy
+    if redundancy > 0.3:
+        score -= 25
+    elif redundancy > 0.1:
+        score -= 10
+
+    # Penalty: System prompt domination
+    if sys_ratio > 0.7:
+        score -= 20
+    elif sys_ratio > 0.5:
+        score -= 10
+
+    # Penalty: Noise
+    noise_penalty = {"low": 0, "med": 5, "high": 15}
+    score -= noise_penalty.get(noise, 0)
+
+    # Clamp to [0, 100]
+    score = max(0, min(100, score))
+
+    # --- Generate recommendations ---
+    recommendations: list[str] = []
+
+    if usage_percent > 90:
+        recommendations.append(
+            "⚠️ CRITICAL: Token usage is above 90%. Trim immediately to avoid overflow."
+        )
+    elif usage_percent > 75:
+        recommendations.append(
+            "Token usage is high (>75%). Consider trimming older messages."
+        )
+
+    if redundancy > 0.1:
+        recommendations.append(
+            f"Detected {redundancy:.0%} redundancy. Remove duplicate messages to free tokens."
+        )
+
+    if sys_ratio > 0.5:
+        recommendations.append(
+            f"System messages consume {sys_ratio:.0%} of tokens. "
+            "Consider condensing system instructions."
+        )
+
+    if noise == "high":
+        recommendations.append(
+            "High noise detected — many very short or empty messages. "
+            "These waste token budget with minimal context value."
+        )
+
+    if not recommendations:
+        recommendations.append("Context is healthy — no immediate action needed.")
+
+    # --- Orchestrator hints ---
+    should_trim = usage_percent > 80 or redundancy > 0.2
+
+    if usage_percent > 85:
+        suggested = "smart"
+    elif redundancy > 0.2:
+        suggested = "digest"
+    elif noise == "high":
+        suggested = "tail"
+    else:
+        suggested = "smart"
+
+    return ContextHealthReport(
+        health_score=score,
+        metrics={
+            "redundancy_ratio": redundancy,
+            "system_to_user_ratio": sys_ratio,
+            "noise_estimate": noise,
+            "token_usage_percent": usage_percent,
+            "total_tokens": total_tokens,
+            "max_tokens": max_tokens,
+            "message_count": len(messages),
+        },
+        recommendations=recommendations,
+        orchestrator_hints={
+            "should_trim_now": should_trim,
+            "suggested_strategy": suggested,
+        },
+    )

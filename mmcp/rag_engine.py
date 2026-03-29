@@ -8,9 +8,10 @@ Local Retrieval-Augmented Generation using:
 Zero external API calls — everything runs on CPU locally.
 
 RFC Improvements Applied:
-  - P3: Real deduplication by file_hash — skips re-indexing unchanged files
-  - P4: max_tokens budget for RAG results — truncates to fit token limit
-  - P6: Stricter retrieval — min_score filter, per-source dedup, max_chunks_per_source
+  - P1 (RFC-002): Lazy model loading — embedding model deferred until first use
+  - P3 (RFC-001): Real deduplication by file_hash — skips re-indexing unchanged files
+  - P4 (RFC-001): max_tokens budget for RAG results — truncates to fit token limit
+  - P6 (RFC-001): Stricter retrieval — min_score filter, per-source dedup, max_chunks_per_source
 """
 
 from __future__ import annotations
@@ -23,8 +24,6 @@ from pathlib import Path
 from typing import Optional
 
 import lancedb
-from lancedb.embeddings import get_registry
-from lancedb.pydantic import LanceModel, Vector
 
 from mmcp.token_counter import count_tokens, DEFAULT_ENCODING
 
@@ -37,15 +36,6 @@ DEFAULT_CHUNK_OVERLAP = 64
 DEFAULT_TOP_K = 5
 DEFAULT_MIN_SCORE = 0.0  # P6: 0.0 = no filter; cosine distance: lower = better
 DEFAULT_MAX_CHUNKS_PER_SOURCE = 0  # P6: 0 = no limit
-
-
-def _get_embedding_function(model_name: str = DEFAULT_EMBEDDING_MODEL):
-    """
-    Get a sentence-transformers embedding function from LanceDB registry.
-    This runs entirely locally on CPU — no API calls.
-    """
-    registry = get_registry()
-    return registry.get("sentence-transformers").create(name=model_name)
 
 
 # --- Chunking ---
@@ -146,9 +136,13 @@ class RAGEngine:
     """
     Local RAG engine backed by LanceDB + multilingual sentence-transformers.
 
+    RFC-002 P1: The embedding model is loaded LAZILY — not at construction time.
+    This means RAGEngine() is instant (~0ms) and the ~12s model load only
+    happens when search() or index_file() is first called.
+
     Usage:
-        engine = RAGEngine()
-        engine.index_file("/path/to/docs/architecture.md")
+        engine = RAGEngine()          # instant — no model loaded
+        engine.index_file("/path/to/docs/architecture.md")  # model loads here
         results = engine.search("How does auth work?", top_k=5)
     """
 
@@ -164,35 +158,81 @@ class RAGEngine:
         self.table_name = table_name
         self.chunk_size = chunk_size
         self.chunk_overlap = chunk_overlap
+        self._embedding_model_name = embedding_model
 
         # Ensure DB directory exists
         Path(db_path).mkdir(parents=True, exist_ok=True)
 
-        # Initialize embedding function
-        self._embedding_fn = _get_embedding_function(embedding_model)
+        # RFC-002 P1: These are ALL deferred — no model loading here
+        self._embedding_fn = None
+        self._schema = None
+        self._model_loaded = False
 
-        # Define the LanceDB schema dynamically based on embedding dimensions
+        # Connect to LanceDB (lightweight — no model needed)
+        self._db = lancedb.connect(db_path)
+        self._table = None
+
+        # P3: Track indexed file hashes in memory for fast dedup checks
+        # Deferred until model is loaded (needs table access)
+        self._indexed_hashes: set[str] = set()
+        self._hashes_loaded = False
+
+    def _ensure_model(self) -> None:
+        """
+        RFC-002 P1: Lazy model initialization.
+
+        Loads the embedding model, creates the schema, and loads existing
+        hashes ONLY when first needed. Subsequent calls are a no-op.
+        """
+        if self._model_loaded:
+            return
+
+        from lancedb.embeddings import get_registry
+        from lancedb.pydantic import LanceModel, Vector
+
+        # Load the embedding model (~12s on first call, cached by lancedb after)
+        registry = get_registry()
+        self._embedding_fn = registry.get("sentence-transformers").create(
+            name=self._embedding_model_name
+        )
+
+        # Build the schema dynamically based on embedding dimensions
         ndims = self._embedding_fn.ndims()
+        embedding_fn = self._embedding_fn
 
         class KnowledgeChunk(LanceModel):
-            text: str = self._embedding_fn.SourceField()
-            vector: Vector(ndims) = self._embedding_fn.VectorField()  # type: ignore[valid-type]
+            text: str = embedding_fn.SourceField()
+            vector: Vector(ndims) = embedding_fn.VectorField()  # type: ignore[valid-type]
             source: str
             chunk_index: int
             file_hash: str
 
         self._schema = KnowledgeChunk
-        self._db = lancedb.connect(db_path)
-        self._table = None
+        self._model_loaded = True
 
-        # P3: Track indexed file hashes in memory for fast dedup checks
-        self._indexed_hashes: set[str] = set()
+        # Now that we have the schema, load existing hashes
         self._load_existing_hashes()
+
+    def _ensure_hashes(self) -> None:
+        """Load hashes if not yet loaded (requires model for schema)."""
+        if not self._hashes_loaded:
+            self._ensure_model()
+
+    def prewarm(self) -> None:
+        """
+        RFC-002 P1: Explicitly pre-load the embedding model.
+
+        Call this if you want to pay the ~12s cost upfront instead of
+        on the first search/index operation.
+        """
+        self._ensure_model()
 
     def _get_or_create_table(self):
         """Lazily get or create the knowledge table."""
         if self._table is not None:
             return self._table
+
+        self._ensure_model()
 
         try:
             self._table = self._db.open_table(self.table_name)
@@ -216,9 +256,11 @@ class RAGEngine:
                 self._indexed_hashes = set(df["file_hash"].unique())
         except Exception:
             self._indexed_hashes = set()
+        self._hashes_loaded = True
 
     def _is_hash_indexed(self, file_hash: str) -> bool:
         """P3: Check if a file hash is already indexed."""
+        self._ensure_hashes()
         return file_hash in self._indexed_hashes
 
     def _remove_by_hash(self, file_hash: str) -> int:
@@ -259,6 +301,9 @@ class RAGEngine:
         Returns:
             Indexing statistics
         """
+        # Ensure model is loaded before indexing
+        self._ensure_model()
+
         filepath = os.path.abspath(filepath)
         if not os.path.isfile(filepath):
             raise FileNotFoundError(f"File not found: {filepath}")
@@ -398,6 +443,9 @@ class RAGEngine:
         Returns:
             List of filtered, budget-aware SearchResults
         """
+        # Ensure model is loaded before searching
+        self._ensure_model()
+
         table = self._get_or_create_table()
 
         try:
@@ -453,25 +501,55 @@ class RAGEngine:
         return search_results
 
     def clear(self) -> dict:
-        """Drop the knowledge table and recreate it empty."""
+        """
+        Drop the knowledge table and recreate it empty.
+
+        RFC-002 P1: Does NOT require loading the embedding model
+        if the table doesn't exist yet.
+        """
         try:
             self._db.drop_table(self.table_name)
         except Exception:
             pass
         self._table = None
         self._indexed_hashes.clear()
+        self._hashes_loaded = False
         return {"status": "cleared", "table": self.table_name}
 
     def stats(self) -> dict:
-        """Get statistics about the indexed knowledge base."""
+        """
+        Get statistics about the indexed knowledge base.
+
+        RFC-002 P1: Tries to get stats WITHOUT loading the embedding
+        model. Falls back gracefully if the table doesn't exist.
+        """
         try:
-            table = self._get_or_create_table()
-            count = table.count_rows()
+            # Try to open existing table without needing the schema
+            if self._table is None:
+                try:
+                    self._table = self._db.open_table(self.table_name)
+                except Exception:
+                    # Table doesn't exist — return empty stats without loading model
+                    return {
+                        "table": self.table_name,
+                        "total_chunks": 0,
+                        "unique_files": 0,
+                        "db_path": self.db_path,
+                        "model_loaded": self._model_loaded,
+                    }
+
+            count = self._table.count_rows()
             return {
                 "table": self.table_name,
                 "total_chunks": count,
                 "unique_files": len(self._indexed_hashes),
                 "db_path": self.db_path,
+                "model_loaded": self._model_loaded,
             }
         except Exception as e:
-            return {"table": self.table_name, "total_chunks": 0, "error": str(e)}
+            return {
+                "table": self.table_name,
+                "total_chunks": 0,
+                "error": str(e),
+                "model_loaded": self._model_loaded,
+            }
