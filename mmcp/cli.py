@@ -319,9 +319,7 @@ def _build_doctor_content():
     banner_text = Text(BANNER, style="bold cyan")
     title_text = Text(f"Context-Life (CL) v{ver}  —  LLM Context Optimization MCP Server\n", style="bold white")
 
-    header_panel = Panel(
-        "[bold]Environment diagnostics[/]", title="🩺 Doctor", border_style="cyan", box=box.ROUNDED
-    )
+    header_panel = Panel("[bold]Environment diagnostics[/]", title="🩺 Doctor", border_style="cyan", box=box.ROUNDED)
 
     checks: list[tuple[str, str, str]] = []  # (name, status, detail)
 
@@ -575,6 +573,13 @@ def _show_in_scrollable_screen(renderable, title: str = "View"):
     from io import StringIO
     from rich.console import Console as _Console
 
+    # Non-interactive environments (CI, pipes, containers without TTY)
+    # cannot handle the alternate-screen key loop safely. Fall back to a
+    # plain render so commands like `context-life info` and `doctor` exit.
+    if not sys.stdin.isatty() or not sys.stdout.isatty():
+        CONSOLE.print(renderable)
+        return
+
     # Step 1: Pre-render content to ANSI lines (one-time cost)
     term_width = CONSOLE.width or 120
     term_height = CONSOLE.height or 40
@@ -608,6 +613,7 @@ def _show_in_scrollable_screen(renderable, title: str = "View"):
     def _strip_ansi_len(s: str) -> int:
         """Estimate visible length by stripping ANSI escape sequences."""
         import re
+
         return len(re.sub(r"\033\[[0-9;]*[a-zA-Z]", "", s))
 
     def paint():
@@ -631,7 +637,7 @@ def _show_in_scrollable_screen(renderable, title: str = "View"):
             if 0 <= content_row and 0 <= line_idx < total_content:
                 line = content_lines[line_idx]
                 if _strip_ansi_len(line) > term_width:
-                    line = line[:term_width + 40]
+                    line = line[: term_width + 40]
                 write(line)
 
         # Footer on the last row of the terminal
@@ -649,6 +655,7 @@ def _show_in_scrollable_screen(renderable, title: str = "View"):
         try:
             if os.name == "nt":
                 import msvcrt
+
                 char = msvcrt.getch()
                 if char in (b"\xe0", b"\x00"):
                     char = msvcrt.getch()
@@ -664,6 +671,7 @@ def _show_in_scrollable_screen(renderable, title: str = "View"):
                 return char.decode("utf-8").lower()
             else:
                 import tty, termios
+
                 fd = sys.stdin.fileno()
                 old_settings = termios.tcgetattr(fd)
                 try:
@@ -856,4 +864,3 @@ def do_tui():
         # After returning from a scrollable screen or normal action,
         # re-launch the main menu
         do_tui()
-
