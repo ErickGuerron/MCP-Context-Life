@@ -14,13 +14,12 @@ The main MCP server that exposes all context optimization tools:
 from __future__ import annotations
 
 import json
-import sys
 from typing import Optional
 
 from mcp.server.fastmcp import FastMCP
 
 from mmcp.cache_manager import CacheLoop
-from mmcp.orchestrator_detector import get_orchestrator_info, reset_detection
+from mmcp.orchestrator_detector import get_orchestrator_info
 from mmcp.rag_engine import RAGEngine
 from mmcp.token_counter import (
     DEFAULT_ENCODING,
@@ -29,11 +28,8 @@ from mmcp.token_counter import (
     count_tokens,
     get_cache_info,
 )
-from mmcp.trim_history import (
-    TrimStrategy,
-    analyze_context_health,
-    trim_messages,
-)
+from mmcp.trim_history import analyze_context_health, trim_messages
+from mmcp.telemetry_service import track_telemetry
 
 # --- Server Instance ---
 mcp = FastMCP(
@@ -65,6 +61,7 @@ def _get_rag_engine() -> RAGEngine:
 
 
 @mcp.tool()
+@track_telemetry("count_tokens")
 def count_tokens_tool(
     text: str,
     encoding: str = DEFAULT_ENCODING,
@@ -82,14 +79,17 @@ def count_tokens_tool(
     token_count = count_tokens(text, encoding)
     _token_budget.consume(token_count)
 
-    return json.dumps({
-        "token_count": token_count,
-        "encoding": encoding,
-        "budget": _token_budget.to_dict(),
-    })
+    return json.dumps(
+        {
+            "token_count": token_count,
+            "encoding": encoding,
+            "budget": _token_budget.to_dict(),
+        }
+    )
 
 
 @mcp.tool()
+@track_telemetry("count_messages_tokens")
 def count_messages_tokens_tool(
     messages: str,
     encoding: str = DEFAULT_ENCODING,
@@ -112,24 +112,29 @@ def count_messages_tokens_tool(
     breakdown = []
     for msg in msgs:
         msg_tokens = count_messages_tokens([msg], encoding)
-        breakdown.append({
-            "role": msg.get("role", "unknown"),
-            "tokens": msg_tokens,
-            "content_preview": str(msg.get("content", ""))[:80],
-        })
+        breakdown.append(
+            {
+                "role": msg.get("role", "unknown"),
+                "tokens": msg_tokens,
+                "content_preview": str(msg.get("content", ""))[:80],
+            }
+        )
 
     _token_budget.consume(total)
 
-    return json.dumps({
-        "total_tokens": total,
-        "message_count": len(msgs),
-        "breakdown": breakdown,
-        "encoding": encoding,
-        "budget": _token_budget.to_dict(),
-    })
+    return json.dumps(
+        {
+            "total_tokens": total,
+            "message_count": len(msgs),
+            "breakdown": breakdown,
+            "encoding": encoding,
+            "budget": _token_budget.to_dict(),
+        }
+    )
 
 
 @mcp.tool()
+@track_telemetry("optimize_messages")
 def optimize_messages(
     messages: str,
     max_tokens: int = 8000,
@@ -164,6 +169,7 @@ def optimize_messages(
 
 
 @mcp.tool()
+@track_telemetry("index_knowledge")
 def index_knowledge(
     path: str,
     recursive: bool = True,
@@ -202,6 +208,7 @@ def index_knowledge(
 
 
 @mcp.tool()
+@track_telemetry("search_context")
 def search_context(
     query: str,
     top_k: int = 5,
@@ -237,14 +244,17 @@ def search_context(
         max_chunks_per_source=max_chunks_per_source,
     )
 
-    return json.dumps({
-        "query": query,
-        "results_count": len(results),
-        "results": [r.to_dict() for r in results],
-    })
+    return json.dumps(
+        {
+            "query": query,
+            "results_count": len(results),
+            "results": [r.to_dict() for r in results],
+        }
+    )
 
 
 @mcp.tool()
+@track_telemetry("cache_context")
 def cache_context(
     messages: str,
     rag_query: Optional[str] = None,
@@ -276,9 +286,7 @@ def cache_context(
         engine = _get_rag_engine()
         results = engine.search(rag_query, top_k=rag_top_k)
         if results:
-            rag_context = "\n\n---\n\n".join(
-                f"[{r.source} | chunk {r.chunk_index}]\n{r.text}" for r in results
-            )
+            rag_context = "\n\n---\n\n".join(f"[{r.source} | chunk {r.chunk_index}]\n{r.text}" for r in results)
 
     result = _cache_loop.process_messages(msgs, rag_context=rag_context)
     return json.dumps(result)
@@ -329,6 +337,7 @@ def reset_token_budget(
 
 
 @mcp.tool()
+@track_telemetry("analyze_context_health")
 def analyze_context_health_tool(
     messages: str,
     max_tokens: int = 128_000,
@@ -365,6 +374,68 @@ def analyze_context_health_tool(
     return json.dumps(result)
 
 
+@mcp.tool()
+@track_telemetry("get_orchestration_advice")
+def get_orchestration_advice(
+    messages: str,
+    max_tokens: int = 128_000,
+    encoding: str = DEFAULT_ENCODING,
+) -> str:
+    """
+    Return orchestration advice for Gentle AI / MCP orchestrators.
+
+    Combines context health + orchestrator detection into a practical
+    next-step contract that upstream orchestrators can consume.
+
+    Args:
+        messages: JSON string of the messages array
+        max_tokens: Maximum token budget for the context window
+        encoding: Tiktoken encoding name
+
+    Returns:
+        JSON with detected orchestrator, health, and actionable next steps
+    """
+    msgs = json.loads(messages)
+    report = analyze_context_health(msgs, max_tokens, encoding)
+    orchestrator = get_orchestrator_info()
+
+    metrics = report.metrics
+    hints = report.orchestrator_hints
+    total_tokens = metrics.get("total_tokens", 0)
+    usage_percent = metrics.get("token_usage_percent", 0.0)
+    redundancy = metrics.get("redundancy_ratio", 0.0)
+    estimated_savings = max(0, int(total_tokens * max(redundancy, usage_percent / 100 * 0.2)))
+
+    if hints.get("should_trim_now"):
+        recommended_next_tool = "optimize_messages"
+        urgency = "high" if usage_percent >= 90 else "medium"
+        reason = "Context pressure is high enough that trimming should happen before the next expensive turn."
+    elif orchestrator.advisor_mode:
+        recommended_next_tool = "cache_context"
+        urgency = "low"
+        reason = "An orchestrator is present; stabilizing the prefix improves reuse across turns."
+    else:
+        recommended_next_tool = "analyze_context_health_tool"
+        urgency = "low"
+        reason = "No orchestrator-specific action is required yet; continue monitoring context health."
+
+    result = {
+        "orchestrator": orchestrator.to_dict(),
+        "health": report.to_dict(),
+        "advice": {
+            "recommended_next_tool": recommended_next_tool,
+            "urgency": urgency,
+            "reason": reason,
+            "suggested_strategy": hints.get("suggested_strategy", "smart"),
+            "should_trim_now": hints.get("should_trim_now", False),
+            "estimated_savings_tokens": estimated_savings,
+            "safe_to_index": usage_percent < 85,
+            "should_snapshot_context": usage_percent >= 75 or redundancy >= 0.2,
+        },
+    }
+    return json.dumps(result)
+
+
 # ============================================================
 # RESOURCES
 # ============================================================
@@ -395,3 +466,39 @@ def rag_stats_resource() -> str:
 def orchestrator_resource() -> str:
     """RFC-002 P3: Detected orchestrator information and advisor mode status."""
     return json.dumps(get_orchestrator_info().to_dict())
+
+
+@mcp.resource("status://orchestration")
+def orchestration_resource() -> str:
+    """Static orchestration contract for upstream AI orchestrators."""
+    orchestrator = get_orchestrator_info()
+    return json.dumps(
+        {
+            "detected_orchestrator": orchestrator.to_dict(),
+            "integration_level": "heuristic-advisor",
+            "capabilities": {
+                "count_tokens": "count_tokens_tool",
+                "count_messages": "count_messages_tokens_tool",
+                "trim": "optimize_messages",
+                "cache": "cache_context",
+                "health": "analyze_context_health_tool",
+                "orchestration_advice": "get_orchestration_advice",
+                "rag_search": "search_context",
+                "rag_index": "index_knowledge",
+            },
+            "recommended_flow": [
+                "count_messages_tokens_tool",
+                "analyze_context_health_tool",
+                "get_orchestration_advice",
+                "optimize_messages",
+                "cache_context",
+            ],
+            "notes": [
+                "Current integration is advisor-based: detection + hints, not a bidirectional handshake.",
+                (
+                    "Use get_orchestration_advice before expensive turns to decide "
+                    "whether to trim, cache, or snapshot context."
+                ),
+            ],
+        }
+    )

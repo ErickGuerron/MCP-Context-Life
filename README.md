@@ -10,7 +10,7 @@
 </p>
 
 <p align="center">
-  <a href="https://github.com/ErickGuerron/MCP-Context-Life/releases"><img src="https://img.shields.io/badge/version-0.5.0-blue?style=flat-square" alt="Version" /></a>
+  <a href="https://github.com/ErickGuerron/MCP-Context-Life/releases"><img src="https://img.shields.io/badge/version-0.6.0-blue?style=flat-square" alt="Version" /></a>
   <a href="https://www.python.org/downloads/"><img src="https://img.shields.io/badge/python-%3E%3D3.10-brightgreen?style=flat-square" alt="Python" /></a>
   <a href="LICENSE.md"><img src="https://img.shields.io/badge/license-MIT-green?style=flat-square" alt="License" /></a>
   <a href="https://modelcontextprotocol.io"><img src="https://img.shields.io/badge/protocol-MCP-purple?style=flat-square" alt="MCP" /></a>
@@ -75,7 +75,7 @@ pip install "context-life[core]"
 pip install "context-life[rag]"
 
 # Pinned to a specific version
-uv tool install "git+https://github.com/ErickGuerron/MCP-Context-Life.git@v0.5.0"
+uv tool install "git+https://github.com/ErickGuerron/MCP-Context-Life.git@v0.6.0"
 ```
 
 ### From Source
@@ -109,7 +109,7 @@ context-life serve --http              # Start MCP server (HTTP)
 context-life info                      # System info, config, dependencies
 context-life doctor                    # Environment diagnostics
 context-life upgrade                   # Upgrade to latest GitHub release
-context-life upgrade --version v0.5.0  # Install specific version
+context-life upgrade --version v0.6.0  # Install specific version
 context-life upgrade --dry-run         # Check without installing
 context-life version                   # Show version
 context-life help                      # Show help
@@ -183,6 +183,7 @@ Edit `claude_desktop_config.json`:
 | `clear_knowledge` | Clear all indexed knowledge |
 | `reset_token_budget` | Reset token budget tracker |
 | `analyze_context_health_tool` | 🆕 Context health analysis with score, metrics & recommendations |
+| `get_orchestration_advice` | 🆕 Actionable next-step contract for Gentle AI / MCP orchestrators |
 
 ### Resources
 
@@ -192,6 +193,7 @@ Edit `claude_desktop_config.json`:
 | `cache://status` | Prompt cache hit/miss performance |
 | `rag://stats` | RAG knowledge base info |
 | `status://orchestrator` | 🆕 Detected orchestrator & advisor mode status |
+| `status://orchestration` | 🆕 Static orchestration contract and recommended tool flow |
 
 ---
 
@@ -267,8 +269,14 @@ Returns actionable recommendations and orchestrator hints for proactive context 
 ### Orchestrator Detection *(v0.5.0)*
 Auto-detects when CL runs alongside AI orchestrators like Gentle AI or Engram:
 - **Environment variables**: `GENTLE_AI_ACTIVE`, `ENGRAM`, `MCP_ORCHESTRATOR`
-- **Workspace artifacts**: `.gemini/`, `.agent/`, `.agents/`
+- **Workspace artifacts**: `.gemini/`, `.gga`, `.agent/`, `.agents/`
 - Enables "Advisor Mode" with proactive optimization hints
+
+### Orchestration Advice *(vNext)*
+Context-Life now exposes a first explicit orchestration contract for upstream orchestrators:
+- `get_orchestration_advice` combines health + detection into actionable next steps
+- `status://orchestration` advertises capabilities and a recommended tool flow
+- Current integration level remains **heuristic-advisor** (not a bidirectional handshake yet)
 
 ---
 

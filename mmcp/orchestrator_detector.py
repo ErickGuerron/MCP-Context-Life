@@ -41,6 +41,7 @@ class OrchestratorInfo:
 
 # --- Detection Strategies ---
 
+
 def _check_env_vars() -> Optional[OrchestratorInfo]:
     """Check for orchestrator-specific environment variables."""
     # Gentle AI / Gemini CLI
@@ -79,6 +80,17 @@ def _check_env_vars() -> Optional[OrchestratorInfo]:
 def _check_workspace_artifacts(cwd: Optional[str] = None) -> Optional[OrchestratorInfo]:
     """Check for orchestrator-related workspace artifacts."""
     workspace = Path(cwd) if cwd else Path.cwd()
+
+    # Gentleman Guardian Angel / Gentle ecosystem marker
+    gga_file = workspace / ".gga"
+    if gga_file.is_file():
+        return OrchestratorInfo(
+            is_detected=True,
+            orchestrator_name="gentle-ai",
+            detection_method="workspace:.gga",
+            features=["gga", "review_rules", "ecosystem"],
+            advisor_mode=True,
+        )
 
     # Gentle AI / Gemini CLI artifacts
     gemini_dir = workspace / ".gemini"

@@ -17,11 +17,11 @@ import pytest
 
 from mmcp.orchestrator_detector import (
     OrchestratorInfo,
+    _check_env_vars,
+    _check_workspace_artifacts,
     detect_orchestrator,
     get_orchestrator_info,
     reset_detection,
-    _check_env_vars,
-    _check_workspace_artifacts,
 )
 
 
@@ -69,10 +69,7 @@ class TestEnvVarDetection:
     def test_no_env_vars(self):
         """No relevant env vars should return None."""
         # Ensure none of the detection env vars are set
-        env_clean = {
-            k: v for k, v in os.environ.items()
-            if k not in ("GENTLE_AI_ACTIVE", "ENGRAM", "MCP_ORCHESTRATOR")
-        }
+        env_clean = {k: v for k, v in os.environ.items() if k not in ("GENTLE_AI_ACTIVE", "ENGRAM", "MCP_ORCHESTRATOR")}
         with patch.dict(os.environ, env_clean, clear=True):
             result = _check_env_vars()
 
@@ -116,6 +113,16 @@ class TestWorkspaceDetection:
         assert result is not None
         assert result.orchestrator_name == "agent-teams"
 
+    def test_gga_file_detected(self):
+        """Presence of .gga should detect the Gentle ecosystem."""
+        with tempfile.TemporaryDirectory() as tmp:
+            (Path(tmp) / ".gga").write_text("PROVIDER=gemini")
+            result = _check_workspace_artifacts(cwd=tmp)
+
+        assert result is not None
+        assert result.orchestrator_name == "gentle-ai"
+        assert result.detection_method == "workspace:.gga"
+
     def test_no_workspace_artifacts(self):
         """Empty workspace should return None."""
         with tempfile.TemporaryDirectory() as tmp:
@@ -141,10 +148,7 @@ class TestDetectOrchestrator:
 
     def test_no_detection_returns_default(self):
         """No orchestrator should return default OrchestratorInfo."""
-        env_clean = {
-            k: v for k, v in os.environ.items()
-            if k not in ("GENTLE_AI_ACTIVE", "ENGRAM", "MCP_ORCHESTRATOR")
-        }
+        env_clean = {k: v for k, v in os.environ.items() if k not in ("GENTLE_AI_ACTIVE", "ENGRAM", "MCP_ORCHESTRATOR")}
         with tempfile.TemporaryDirectory() as tmp:
             with patch.dict(os.environ, env_clean, clear=True):
                 result = detect_orchestrator(cwd=tmp)
@@ -159,17 +163,15 @@ class TestCachedDetection:
 
     def test_cached_result_reused(self):
         """Second call should reuse cached result."""
-        env_clean = {
-            k: v for k, v in os.environ.items()
-            if k not in ("GENTLE_AI_ACTIVE", "ENGRAM", "MCP_ORCHESTRATOR")
-        }
+        env_clean = {k: v for k, v in os.environ.items() if k not in ("GENTLE_AI_ACTIVE", "ENGRAM", "MCP_ORCHESTRATOR")}
         with patch.dict(os.environ, env_clean, clear=True):
             with tempfile.TemporaryDirectory() as tmp:
                 result1 = detect_orchestrator(cwd=tmp)
                 # Manually set cache
                 from mmcp import orchestrator_detector
+
                 orchestrator_detector._cached_result = result1
-                
+
                 result2 = get_orchestrator_info()
 
         assert result1 is result2
@@ -178,9 +180,7 @@ class TestCachedDetection:
         """reset_detection() should clear the cache."""
         from mmcp import orchestrator_detector
 
-        orchestrator_detector._cached_result = OrchestratorInfo(
-            is_detected=True, orchestrator_name="test"
-        )
+        orchestrator_detector._cached_result = OrchestratorInfo(is_detected=True, orchestrator_name="test")
         reset_detection()
         assert orchestrator_detector._cached_result is None
 
