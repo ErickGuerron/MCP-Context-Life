@@ -165,7 +165,7 @@ jobs:
           load: true
           tags: context-life:test
           cache-from: type=gha
-          cache-to: type=gha,mode=max
+          cache-to: type=gha,mode=min
 
       - name: Verify CLI in container
         run: |

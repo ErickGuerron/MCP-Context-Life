@@ -1,0 +1,7 @@
+**
+!.dockerignore
+!Dockerfile
+!pyproject.toml
+!README.md
+!mmcp/
+!mmcp/**
