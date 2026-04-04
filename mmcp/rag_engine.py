@@ -40,6 +40,7 @@ DEFAULT_MAX_CHUNKS_PER_SOURCE = 0  # P6: 0 = no limit
 
 # --- Chunking ---
 
+
 def _chunk_text(
     text: str,
     chunk_size: int = DEFAULT_CHUNK_SIZE,
@@ -112,7 +113,24 @@ def _compute_file_hash(filepath: str) -> str:
     return sha256.hexdigest()
 
 
+def _iter_directory_files(dirpath: str, recursive: bool):
+    """Yield files with deterministic ordering using a single filesystem walk."""
+    if recursive:
+        for root, dirs, files in os.walk(dirpath):
+            dirs.sort()
+            files.sort()
+            for filename in files:
+                yield os.path.join(root, filename)
+        return
+
+    with os.scandir(dirpath) as entries:
+        for entry in sorted(entries, key=lambda item: item.name):
+            if entry.is_file():
+                yield entry.path
+
+
 # --- RAG Engine ---
+
 
 @dataclass
 class SearchResult:
@@ -192,9 +210,7 @@ class RAGEngine:
 
         # Load the embedding model (~12s on first call, cached by lancedb after)
         registry = get_registry()
-        self._embedding_fn = registry.get("sentence-transformers").create(
-            name=self._embedding_model_name
-        )
+        self._embedding_fn = registry.get("sentence-transformers").create(name=self._embedding_model_name)
 
         # Build the schema dynamically based on embedding dimensions
         ndims = self._embedding_fn.ndims()
@@ -381,9 +397,21 @@ class RAGEngine:
         """
         if extensions is None:
             extensions = [
-                ".md", ".txt", ".py", ".js", ".ts", ".go",
-                ".rs", ".java", ".yaml", ".yml", ".toml",
-                ".json", ".html", ".css", ".sh",
+                ".md",
+                ".txt",
+                ".py",
+                ".js",
+                ".ts",
+                ".go",
+                ".rs",
+                ".java",
+                ".yaml",
+                ".yml",
+                ".toml",
+                ".json",
+                ".html",
+                ".css",
+                ".sh",
             ]
 
         dirpath = os.path.abspath(dirpath)
@@ -392,23 +420,27 @@ class RAGEngine:
 
         results = {"indexed": 0, "skipped": 0, "errors": 0, "files": []}
 
-        pattern = "**/*" if recursive else "*"
-        for ext in extensions:
-            for filepath in Path(dirpath).glob(f"{pattern}{ext}"):
-                try:
-                    result = self.index_file(str(filepath), force=force)
-                    if result["status"] == "indexed":
-                        results["indexed"] += 1
-                    else:
-                        results["skipped"] += 1
-                    results["files"].append(result)
-                except Exception as e:
-                    results["errors"] += 1
-                    results["files"].append({
+        allowed_extensions = {ext.lower() for ext in extensions}
+        for filepath in _iter_directory_files(dirpath, recursive):
+            if Path(filepath).suffix.lower() not in allowed_extensions:
+                continue
+
+            try:
+                result = self.index_file(filepath, force=force)
+                if result["status"] == "indexed":
+                    results["indexed"] += 1
+                else:
+                    results["skipped"] += 1
+                results["files"].append(result)
+            except Exception as e:
+                results["errors"] += 1
+                results["files"].append(
+                    {
                         "status": "error",
                         "source": str(filepath),
                         "error": str(e),
-                    })
+                    }
+                )
 
         return results
 
@@ -449,12 +481,7 @@ class RAGEngine:
         table = self._get_or_create_table()
 
         try:
-            rows = (
-                table.search(query)
-                .metric("cosine")
-                .limit(top_k)
-                .to_list()
-            )
+            rows = table.search(query).metric("cosine").limit(top_k).to_list()
         except Exception:
             return []
 

@@ -68,6 +68,8 @@ class CLConfig:
     # --- Cache ---
     cache_max_entries: int = 50
     cache_db_path: str = ""  # Empty = auto (data_dir/session.db)
+    cache_rag_thrash_threshold: int = 3
+    cache_rag_bypass_cooldown: int = 2
 
     # --- Paths ---
     data_dir: str = ""  # Empty = auto-resolved
@@ -112,6 +114,8 @@ def _env_override(config: CLConfig) -> None:
         "CL_TRIM_PRESERVE_RECENT": ("trim_preserve_recent", int),
         "CL_CACHE_MAX_ENTRIES": ("cache_max_entries", int),
         "CL_CACHE_DB_PATH": ("cache_db_path", str),
+        "CL_CACHE_RAG_THRASH_THRESHOLD": ("cache_rag_thrash_threshold", int),
+        "CL_CACHE_RAG_BYPASS_COOLDOWN": ("cache_rag_bypass_cooldown", int),
         "CL_DATA_DIR": ("data_dir", str),
         "CL_GITHUB_REPO": ("github_repo", str),
     }
@@ -151,8 +155,15 @@ def load_config(config_path: Optional[str] = None) -> CLConfig:
 
     if data:
         rag = data.get("rag", {})
-        for key in ("db_path", "table_name", "top_k", "min_score",
-                     "max_chunks_per_source", "chunk_size", "chunk_overlap"):
+        for key in (
+            "db_path",
+            "table_name",
+            "top_k",
+            "min_score",
+            "max_chunks_per_source",
+            "chunk_size",
+            "chunk_overlap",
+        ):
             if key in rag:
                 setattr(config, f"rag_{key}", rag[key])
 
@@ -171,6 +182,10 @@ def load_config(config_path: Optional[str] = None) -> CLConfig:
             config.cache_max_entries = cache_cfg["max_entries"]
         if "db_path" in cache_cfg:
             config.cache_db_path = cache_cfg["db_path"]
+        if "rag_thrash_threshold" in cache_cfg:
+            config.cache_rag_thrash_threshold = cache_cfg["rag_thrash_threshold"]
+        if "rag_bypass_cooldown" in cache_cfg:
+            config.cache_rag_bypass_cooldown = cache_cfg["rag_bypass_cooldown"]
 
         paths = data.get("paths", {})
         if "data_dir" in paths:

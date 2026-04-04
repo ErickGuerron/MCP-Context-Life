@@ -332,6 +332,12 @@ ruff check mmcp/
 
 # Test
 pytest
+
+# Skip slow RAG integration tests
+pytest -m "not slow"
+
+# Run performance-oriented smoke/stress tests
+pytest -m performance
 ```
 
 ---

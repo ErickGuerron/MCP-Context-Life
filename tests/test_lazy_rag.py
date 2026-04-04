@@ -18,7 +18,7 @@ import pytest
 
 
 def test_rag_engine_instant_construction():
-    """RAGEngine() should construct in < 100ms — no model loading."""
+    """RAGEngine() should construct quickly without loading the model."""
     with tempfile.TemporaryDirectory() as tmp_dir:
         start = time.perf_counter()
 
@@ -27,6 +27,7 @@ def test_rag_engine_instant_construction():
             mock_lancedb.connect.return_value = MagicMock()
 
             from mmcp.rag_engine import RAGEngine
+
             engine = RAGEngine(db_path=tmp_dir, table_name="test_lazy")
 
         elapsed_ms = (time.perf_counter() - start) * 1000
@@ -34,7 +35,9 @@ def test_rag_engine_instant_construction():
         assert not engine._model_loaded, "Model should NOT be loaded at construction"
         assert engine._embedding_fn is None, "Embedding fn should be None at construction"
         assert engine._schema is None, "Schema should be None at construction"
-        assert elapsed_ms < 500, f"Construction took {elapsed_ms:.0f}ms — should be < 500ms"
+        # Keep this as a broad smoke threshold: import/patch overhead varies a lot
+        # across Python versions and Windows CI runners, but model loading must not happen.
+        assert elapsed_ms < 2000, f"Construction took {elapsed_ms:.0f}ms — should stay well below model-load latency"
 
 
 def test_stats_without_model():
@@ -47,6 +50,7 @@ def test_stats_without_model():
             mock_lancedb.connect.return_value = mock_db
 
             from mmcp.rag_engine import RAGEngine
+
             engine = RAGEngine(db_path=tmp_dir, table_name="test_stats")
 
         result = engine.stats()
@@ -64,6 +68,7 @@ def test_clear_without_model():
             mock_lancedb.connect.return_value = mock_db
 
             from mmcp.rag_engine import RAGEngine
+
             engine = RAGEngine(db_path=tmp_dir, table_name="test_clear")
 
         result = engine.clear()
@@ -72,12 +77,55 @@ def test_clear_without_model():
         assert not engine._model_loaded, "Model should NOT load for clear()"
 
 
+def test_index_directory_walks_filesystem_once(tmp_path, monkeypatch):
+    """index_directory() should scan once and filter extensions in-memory."""
+    docs_dir = tmp_path / "docs"
+    docs_dir.mkdir()
+    nested_dir = docs_dir / "nested"
+    nested_dir.mkdir()
+
+    (docs_dir / "keep.py").write_text("print('ok')")
+    (docs_dir / "skip.txt").write_text("ignore me")
+    (nested_dir / "keep.md").write_text("# hello")
+
+    with patch("mmcp.rag_engine.lancedb") as mock_lancedb:
+        mock_lancedb.connect.return_value = MagicMock()
+
+        import mmcp.rag_engine as rag_module
+
+        engine = rag_module.RAGEngine(db_path=str(tmp_path / "db"), table_name="test_walk")
+
+    indexed_paths = []
+    walk_calls = 0
+    original_walk = rag_module.os.walk
+
+    def counting_walk(*args, **kwargs):
+        nonlocal walk_calls
+        walk_calls += 1
+        return original_walk(*args, **kwargs)
+
+    def fake_index_file(filepath, source_label=None, force=False):
+        indexed_paths.append(Path(filepath).name)
+        return {"status": "indexed", "source": Path(filepath).name, "chunks": 1, "file_hash": "fakehash1234"}
+
+    monkeypatch.setattr(rag_module.os, "walk", counting_walk)
+    monkeypatch.setattr(engine, "index_file", fake_index_file)
+
+    result = engine.index_directory(str(docs_dir), extensions=[".py", ".md"], recursive=True)
+
+    assert walk_calls == 1
+    assert indexed_paths == ["keep.py", "keep.md"]
+    assert result["indexed"] == 2
+    assert result["skipped"] == 0
+
+
+@pytest.mark.slow
 def test_rag_full_lifecycle():
     """
     Integration test: RAGEngine constructs instantly, then model loads
     on first index_file, and search works correctly.
 
-    NOTE: This test WILL load the real model (~12s). It's a true 
+    NOTE: This test WILL load the real model (~12s). It's a true
     integration test — skip in CI with: pytest -m "not slow"
     """
     with tempfile.TemporaryDirectory() as tmp_dir:

@@ -40,6 +40,7 @@ class TrimResult:
     trimmed_token_count: int
     messages_removed: int
     strategy_used: str
+    diagnostics_extra: dict = field(default_factory=dict)
 
     @property
     def tokens_saved(self) -> int:
@@ -52,16 +53,18 @@ class TrimResult:
         return round((self.tokens_saved / self.original_token_count) * 100, 2)
 
     def to_dict(self) -> dict:
+        diagnostics = {
+            "original_tokens": self.original_token_count,
+            "trimmed_tokens": self.trimmed_token_count,
+            "tokens_saved": self.tokens_saved,
+            "reduction_percent": self.reduction_percent,
+            "messages_removed": self.messages_removed,
+            "strategy": self.strategy_used,
+        }
+        diagnostics.update(self.diagnostics_extra)
         return {
             "messages": self.messages,
-            "diagnostics": {
-                "original_tokens": self.original_token_count,
-                "trimmed_tokens": self.trimmed_token_count,
-                "tokens_saved": self.tokens_saved,
-                "reduction_percent": self.reduction_percent,
-                "messages_removed": self.messages_removed,
-                "strategy": self.strategy_used,
-            },
+            "diagnostics": diagnostics,
         }
 
 
@@ -69,6 +72,113 @@ def _is_system_message(message: dict) -> bool:
     """Check if a message has a system-like role."""
     role = message.get("role", "").lower()
     return role in ("system", "developer")
+
+
+def _extract_text_fragments(value: object) -> list[str]:
+    """Recursively extract human-meaningful text from structured content."""
+    ignored_keys = {"type", "image_url", "url", "uri", "mime_type", "media_type"}
+    if isinstance(value, str):
+        return [value]
+    if isinstance(value, list):
+        fragments: list[str] = []
+        for item in value:
+            fragments.extend(_extract_text_fragments(item))
+        return fragments
+    if isinstance(value, dict):
+        fragments: list[str] = []
+        preferred_keys = ("text", "content", "value", "title", "caption", "input", "output")
+
+        for key in preferred_keys:
+            if key in value:
+                fragments.extend(_extract_text_fragments(value[key]))
+
+        for key, item in value.items():
+            if key not in preferred_keys and key not in ignored_keys and isinstance(item, (str, list, dict)):
+                fragments.extend(_extract_text_fragments(item))
+
+        return fragments
+    return []
+
+
+def _extract_text_content(value: object, *, normalize: bool = False) -> str:
+    """Join recursively extracted text into one comparable string."""
+    text = " ".join(fragment for fragment in _extract_text_fragments(value) if fragment)
+    text = text.strip()
+    if normalize:
+        return " ".join(text.split()).strip().lower()
+    return text
+
+
+def _build_system_budget_fallback(
+    max_tokens: int,
+    system_tokens: int,
+    encoding: str,
+) -> tuple[list[dict], dict]:
+    """Return an explicit bounded fallback when anchors alone exceed budget."""
+    candidates = [
+        {
+            "role": "system",
+            "content": (
+                "[CL Trim Fallback] System/developer instructions exceed the available "
+                "token budget. Increase max_tokens to preserve them."
+            ),
+        },
+        {
+            "role": "system",
+            "content": "[CL Trim Fallback] System/developer instructions exceed max_tokens.",
+        },
+        {
+            "role": "system",
+            "content": "[CL Trim Fallback] Increase max_tokens.",
+        },
+    ]
+
+    diagnostics = {
+        "system_budget_fallback": True,
+        "system_budget_required_tokens": system_tokens,
+        "system_budget_fallback_mode": "empty_output",
+    }
+
+    for candidate in candidates:
+        if count_messages_tokens([candidate], encoding) <= max_tokens:
+            diagnostics["system_budget_fallback_mode"] = "minimal_anchor"
+            return [candidate], diagnostics
+
+    return [], diagnostics
+
+
+def _count_message_tokens(message: dict, encoding: str) -> int:
+    """Count tokens for a single message preserving current semantics."""
+    return count_messages_tokens([message], encoding)
+
+
+def _count_token_group_from_cached(token_counts: list[int]) -> int:
+    """Reconstruct multi-message token counts from cached single-message counts."""
+    if not token_counts:
+        return 0
+    return sum(token_counts) - (3 * (len(token_counts) - 1))
+
+
+def _partition_messages_with_token_counts(
+    messages: list[dict],
+    encoding: str,
+) -> tuple[list[dict], list[int], list[dict], list[int]]:
+    """Split messages by role while caching per-message token counts."""
+    system_msgs: list[dict] = []
+    system_token_counts: list[int] = []
+    non_system_msgs: list[dict] = []
+    non_system_token_counts: list[int] = []
+
+    for message in messages:
+        token_count = _count_message_tokens(message, encoding)
+        if _is_system_message(message):
+            system_msgs.append(message)
+            system_token_counts.append(token_count)
+        else:
+            non_system_msgs.append(message)
+            non_system_token_counts.append(token_count)
+
+    return system_msgs, system_token_counts, non_system_msgs, non_system_token_counts
 
 
 def trim_tail(
@@ -91,19 +201,19 @@ def trim_tail(
             strategy_used=TrimStrategy.TAIL.value,
         )
 
-    # Separate system messages (always kept) from the rest
-    system_msgs = [m for m in messages if _is_system_message(m)]
-    non_system_msgs = [m for m in messages if not _is_system_message(m)]
+    system_msgs, system_token_counts, non_system_msgs, non_system_token_counts = _partition_messages_with_token_counts(
+        messages,
+        encoding,
+    )
 
-    system_tokens = count_messages_tokens(system_msgs, encoding) if system_msgs else 0
+    system_tokens = _count_token_group_from_cached(system_token_counts)
     available_tokens = max_tokens - system_tokens
 
     # Walk backwards through non-system messages, accumulating
     kept: list[dict] = []
     running_tokens = 0
 
-    for msg in reversed(non_system_msgs):
-        msg_tokens = count_messages_tokens([msg], encoding)
+    for msg, msg_tokens in zip(reversed(non_system_msgs), reversed(non_system_token_counts)):
         if running_tokens + msg_tokens <= available_tokens:
             kept.insert(0, msg)
             running_tokens += msg_tokens
@@ -142,17 +252,18 @@ def trim_head(
             strategy_used=TrimStrategy.HEAD.value,
         )
 
-    system_msgs = [m for m in messages if _is_system_message(m)]
-    non_system_msgs = [m for m in messages if not _is_system_message(m)]
+    system_msgs, system_token_counts, non_system_msgs, non_system_token_counts = _partition_messages_with_token_counts(
+        messages,
+        encoding,
+    )
 
-    system_tokens = count_messages_tokens(system_msgs, encoding) if system_msgs else 0
+    system_tokens = _count_token_group_from_cached(system_token_counts)
     available_tokens = max_tokens - system_tokens
 
     kept: list[dict] = []
     running_tokens = 0
 
-    for msg in non_system_msgs:
-        msg_tokens = count_messages_tokens([msg], encoding)
+    for msg, msg_tokens in zip(non_system_msgs, non_system_token_counts):
         if running_tokens + msg_tokens <= available_tokens:
             kept.append(msg)
             running_tokens += msg_tokens
@@ -182,11 +293,11 @@ def trim_smart(
     Intelligent trimming strategy — the crown jewel of Context-Life.
 
     Strict Budget Enforcement Ladder:
-      1. ALWAYS protect system/developer messages (immutable anchors)
+      1. ALWAYS protect system/developer messages when they fit
       2. Try to protect the last `preserve_recent` non-system messages
       3. Drop ALL middle messages first
       4. If still over budget → reduce preserve_recent progressively
-      5. If STILL over budget → trim system messages to fit
+      5. If system/developer anchors alone exceed budget → return explicit fallback
       6. GUARANTEE: output token count ≤ max_tokens
 
     Args:
@@ -197,6 +308,7 @@ def trim_smart(
         summary_prompt: Optional — not used yet, reserved for LLM summarization
     """
     original_count = count_messages_tokens(messages, encoding)
+    diagnostics_extra: dict = {}
 
     if original_count <= max_tokens:
         return TrimResult(
@@ -207,27 +319,39 @@ def trim_smart(
             strategy_used=TrimStrategy.SMART.value,
         )
 
-    # Phase 1: Classify messages
-    system_msgs = [m for m in messages if _is_system_message(m)]
-    non_system = [m for m in messages if not _is_system_message(m)]
+    # Phase 1: Classify messages and cache per-message token counts
+    system_msgs, system_token_counts, non_system, non_system_token_counts = _partition_messages_with_token_counts(
+        messages,
+        encoding,
+    )
 
-    system_tokens = count_messages_tokens(system_msgs, encoding) if system_msgs else 0
+    system_tokens = _count_token_group_from_cached(system_token_counts)
+
+    recent_suffix_tokens = [0] * (len(non_system_token_counts) + 1)
+    running_suffix_single_tokens = 0
+    running_suffix_count = 0
+    for index in range(len(non_system_token_counts) - 1, -1, -1):
+        running_suffix_single_tokens += non_system_token_counts[index]
+        running_suffix_count += 1
+        recent_suffix_tokens[index] = running_suffix_single_tokens - (3 * (running_suffix_count - 1))
 
     # Phase 2: Strict ladder — adjust preserve_recent until it fits
     effective_recent = min(preserve_recent, len(non_system))
+    middle_end = len(non_system)
 
     while effective_recent >= 0:
+        middle_end = len(non_system) - effective_recent
         if effective_recent == 0:
             recent_msgs = []
             middle_msgs = non_system
-        elif len(non_system) <= effective_recent:
+        elif middle_end <= 0:
             recent_msgs = non_system
             middle_msgs = []
         else:
-            middle_msgs = non_system[:-effective_recent]
-            recent_msgs = non_system[-effective_recent:]
+            middle_msgs = non_system[:middle_end]
+            recent_msgs = non_system[middle_end:]
 
-        recent_tokens = count_messages_tokens(recent_msgs, encoding) if recent_msgs else 0
+        recent_tokens = recent_suffix_tokens[middle_end]
         budget_for_middle = max_tokens - system_tokens - recent_tokens
 
         if budget_for_middle >= 0:
@@ -242,8 +366,9 @@ def trim_smart(
     dropped_contents: list[str] = []
 
     if budget_for_middle > 0 and middle_msgs:
-        for msg in reversed(middle_msgs):
-            msg_tokens = count_messages_tokens([msg], encoding)
+        for index in range(len(middle_msgs) - 1, -1, -1):
+            msg = middle_msgs[index]
+            msg_tokens = non_system_token_counts[index]
             if running_middle_tokens + msg_tokens <= budget_for_middle:
                 kept_middle.insert(0, msg)
                 running_middle_tokens += msg_tokens
@@ -258,16 +383,13 @@ def trim_smart(
     if dropped_contents:
         summary_text = (
             f"[CL Context Summary] {len(dropped_contents)} earlier messages were "
-            f"compressed. Topics: "
-            + "; ".join(dropped_contents[:3])
+            f"compressed. Topics: " + "; ".join(dropped_contents[:3])
         )
 
         summary_tokens = count_tokens(summary_text, encoding)
         remaining_budget = budget_for_middle - running_middle_tokens
         if remaining_budget >= summary_tokens:
-            summary_injection = [
-                {"role": "system", "content": summary_text}
-            ]
+            summary_injection = [{"role": "system", "content": summary_text}]
 
     # Phase 5: Assemble and ENFORCE strict budget
     result_messages = system_msgs + summary_injection + kept_middle + recent_msgs
@@ -289,26 +411,13 @@ def trim_smart(
         result_messages = system_msgs + recent_msgs
         trimmed_count = count_messages_tokens(result_messages, encoding)
 
-    # Strict enforcement pass 3: oversized system anchors — compact into digest
+    # Strict enforcement pass 3: oversized system anchors — explicit fallback
     if trimmed_count > max_tokens and system_msgs:
-        # Build a compressed policy digest from all system messages
-        digest_parts: list[str] = []
-        for msg in system_msgs:
-            content = msg.get("content", "")
-            if isinstance(content, str) and content.strip():
-                # Take first N chars of each system message
-                digest_parts.append(content[:200])
-
-        digest_text = (
-            "[CL System Digest — original system instructions were compressed to fit budget]\n"
-            + "\n---\n".join(digest_parts)
+        result_messages, diagnostics_extra = _build_system_budget_fallback(
+            max_tokens=max_tokens,
+            system_tokens=system_tokens,
+            encoding=encoding,
         )
-
-        # Iteratively truncate digest until it fits
-        while count_tokens(digest_text, encoding) > max_tokens - 10 and len(digest_text) > 100:
-            digest_text = digest_text[: len(digest_text) * 3 // 4]
-
-        result_messages = [{"role": "system", "content": digest_text}]
         trimmed_count = count_messages_tokens(result_messages, encoding)
 
     return TrimResult(
@@ -317,6 +426,7 @@ def trim_smart(
         trimmed_token_count=trimmed_count,
         messages_removed=len(messages) - len(result_messages),
         strategy_used=TrimStrategy.SMART.value,
+        diagnostics_extra=diagnostics_extra,
     )
 
 
@@ -383,10 +493,8 @@ def _compute_redundancy_ratio(messages: list[dict]) -> float:
 
     content_hashes: list[str] = []
     for msg in messages:
-        content = msg.get("content", "")
-        if isinstance(content, str):
-            # Normalize whitespace for comparison
-            normalized = " ".join(content.split()).strip().lower()
+        normalized = _extract_text_content(msg.get("content", ""), normalize=True)
+        if normalized:
             content_hashes.append(normalized)
 
     if not content_hashes:
@@ -414,8 +522,9 @@ def _compute_system_to_user_ratio(
 
     for msg in messages:
         content = msg.get("content", "")
-        if isinstance(content, str):
-            tokens = count_tokens(content, encoding)
+        extracted_text = _extract_text_content(content)
+        if extracted_text:
+            tokens = count_tokens(extracted_text, encoding)
         elif isinstance(content, (dict, list)):
             tokens = count_tokens(json.dumps(content), encoding)
         else:
@@ -451,13 +560,11 @@ def _estimate_noise(messages: list[dict]) -> str:
     empty_count = 0
 
     for msg in non_system:
-        content = msg.get("content", "")
-        if isinstance(content, str):
-            stripped = content.strip()
-            if not stripped:
-                empty_count += 1
-            elif len(stripped) < 5:
-                short_count += 1
+        stripped = _extract_text_content(msg.get("content", "")).strip()
+        if not stripped:
+            empty_count += 1
+        elif len(stripped) < 5:
+            short_count += 1
 
     noise_ratio = (short_count + empty_count) / len(non_system)
 
@@ -552,23 +659,16 @@ def analyze_context_health(
     recommendations: list[str] = []
 
     if usage_percent > 90:
-        recommendations.append(
-            "⚠️ CRITICAL: Token usage is above 90%. Trim immediately to avoid overflow."
-        )
+        recommendations.append("⚠️ CRITICAL: Token usage is above 90%. Trim immediately to avoid overflow.")
     elif usage_percent > 75:
-        recommendations.append(
-            "Token usage is high (>75%). Consider trimming older messages."
-        )
+        recommendations.append("Token usage is high (>75%). Consider trimming older messages.")
 
     if redundancy > 0.1:
-        recommendations.append(
-            f"Detected {redundancy:.0%} redundancy. Remove duplicate messages to free tokens."
-        )
+        recommendations.append(f"Detected {redundancy:.0%} redundancy. Remove duplicate messages to free tokens.")
 
     if sys_ratio > 0.5:
         recommendations.append(
-            f"System messages consume {sys_ratio:.0%} of tokens. "
-            "Consider condensing system instructions."
+            f"System messages consume {sys_ratio:.0%} of tokens. Consider condensing system instructions."
         )
 
     if noise == "high":
