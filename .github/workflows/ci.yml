@@ -55,6 +55,7 @@ jobs:
   test-install:
     name: "📦 Test Install (${{ matrix.os }} / Python ${{ matrix.python-version }})"
     strategy:
+      fail-fast: false
       matrix:
         os: [ubuntu-latest, macos-latest, windows-latest]
         python-version: ["3.10", "3.11", "3.12"]

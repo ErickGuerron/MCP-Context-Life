@@ -190,7 +190,7 @@ class SessionStore:
     def _aggregate_usage_since(self, since_timestamp: float | None = None) -> dict[str, int]:
         """Aggregate explicit usage counters, optionally bounded by a start timestamp."""
         query = """
-            SELECT 
+            SELECT
                 SUM(input_tokens),
                 SUM(output_tokens),
                 SUM(effective_saved_tokens),
