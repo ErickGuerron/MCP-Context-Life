@@ -1,4 +1,3 @@
-import os
 from pathlib import Path
 
 import pytest
@@ -14,11 +13,11 @@ def isolated_data_dir(tmp_path: Path):
     """
     reset_config()
     cfg = get_config()
-    
+
     # Isolate data directory
     cfg.data_dir = str(tmp_path / "cl_data")
     cfg.cache_db_path = str(tmp_path / "cl_data" / "session.db")
-    
+
     yield cfg
-    
+
     reset_config()

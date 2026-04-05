@@ -1,9 +1,4 @@
-import json
-
-import pytest
-
-from mmcp.trim_history import trim_messages, count_messages_tokens
-from mmcp.token_counter import count_tokens
+from mmcp.trim_history import count_messages_tokens, trim_messages
 
 
 def test_trim_smart_protects_anchors():

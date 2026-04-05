@@ -17,12 +17,11 @@ recommendations and orchestrator hints.
 from __future__ import annotations
 
 import json
-from collections import Counter
 from dataclasses import dataclass, field
 from enum import Enum
 from typing import Optional
 
-from mmcp.token_counter import count_messages_tokens, count_tokens, DEFAULT_ENCODING
+from mmcp.token_counter import DEFAULT_ENCODING, count_messages_tokens, count_tokens
 
 
 class TrimStrategy(str, Enum):

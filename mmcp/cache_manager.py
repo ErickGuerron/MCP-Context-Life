@@ -23,14 +23,13 @@ from __future__ import annotations
 
 import hashlib
 import json
-import re
 import time
 from dataclasses import dataclass, field
 from typing import Optional
 
 from mmcp.config import get_config
 from mmcp.session_store import SessionStore
-from mmcp.token_counter import count_tokens, DEFAULT_ENCODING
+from mmcp.token_counter import DEFAULT_ENCODING, count_tokens
 
 
 def _canonicalize_content(content: str) -> str:

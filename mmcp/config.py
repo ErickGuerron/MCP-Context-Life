@@ -103,16 +103,47 @@ def _toml_literal(value: object) -> str:
     return json.dumps(str(value))
 
 
-def save_config(config: "CLConfig", config_path: Optional[str] = None) -> Path:
-    """Persist the current configuration to TOML."""
+def _section_value(data: dict, section: str, key: str) -> object:
+    """Safely read a nested TOML section value."""
+    section_data = data.get(section, {})
+    if isinstance(section_data, dict):
+        return section_data.get(key)
+    return None
+
+
+def save_config(
+    config: "CLConfig",
+    config_path: Optional[str] = None,
+    *,
+    persist_runtime_paths: bool = False,
+) -> Path:
+    """Persist the current configuration to TOML.
+
+    By default, writes to the real user config preserve any already-persisted
+    path settings instead of serializing transient in-memory overrides. This
+    prevents tests/helper flows from leaking temporary pytest paths into the
+    user's real config.toml when they only intended to save another setting.
+    """
     path = Path(config_path) if config_path else _default_config_path()
     path.parent.mkdir(parents=True, exist_ok=True)
+
+    existing = _load_toml(path)
+    preserve_existing_paths = config_path is None and not persist_runtime_paths
+
+    rag_db_path = config.rag_db_path
+    cache_db_path = config.cache_db_path
+    data_dir = config.data_dir
+
+    if preserve_existing_paths:
+        rag_db_path = _section_value(existing, "rag", "db_path") or ""
+        cache_db_path = _section_value(existing, "cache", "db_path") or ""
+        data_dir = _section_value(existing, "paths", "data_dir") or ""
 
     sections = [
         (
             "rag",
             {
-                "db_path": config.rag_db_path,
+                "db_path": rag_db_path,
                 "table_name": config.rag_table_name,
                 "top_k": config.rag_top_k,
                 "min_score": config.rag_min_score,
@@ -134,19 +165,22 @@ def save_config(config: "CLConfig", config_path: Optional[str] = None) -> Path:
             "cache",
             {
                 "max_entries": config.cache_max_entries,
-                "db_path": config.cache_db_path,
+                "db_path": cache_db_path,
                 "rag_thrash_threshold": config.cache_rag_thrash_threshold,
                 "rag_bypass_cooldown": config.cache_rag_bypass_cooldown,
             },
         ),
-        ("paths", {"data_dir": config.data_dir}),
+        ("paths", {"data_dir": data_dir}),
         ("upgrade", {"github_repo": config.github_repo}),
     ]
 
     lines: list[str] = []
     for section, values in sections:
+        filtered_values = {key: value for key, value in values.items() if value not in (None, "")}
+        if not filtered_values:
+            continue
         lines.append(f"[{section}]")
-        for key, value in values.items():
+        for key, value in filtered_values.items():
             lines.append(f"{key} = {_toml_literal(value)}")
         lines.append("")
 

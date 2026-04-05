@@ -1,3 +1,5 @@
+import time
+
 from rich.console import Console
 
 from mmcp import cli
@@ -14,9 +16,9 @@ from mmcp.cli import (
     _build_rag_warmup_table,
     _build_telemetry_content,
     _build_telemetry_pages,
-    _build_warmup_status_pages,
-    _build_warmup_status_content,
     _build_warmup_menu,
+    _build_warmup_status_content,
+    _build_warmup_status_pages,
     _get_detail_pages,
     _move_detail_page,
     _move_menu_selection,
@@ -192,8 +194,8 @@ def test_compact_health_layout_groups_checks_by_section(isolated_data_dir):
 def test_compact_telemetry_layout_uses_summary_and_model_usage(isolated_data_dir):
     text = _render_text(_build_telemetry_content())
 
-    assert "💰 savings" in text
-    assert "📅 budget" in text
+    assert "💰 telemetry" in text
+    assert "📅 budget reference" in text
     assert "model usage" in text
     assert "weekly usage tracker" not in text
 
@@ -416,3 +418,85 @@ def test_long_telemetry_rows_wrap_without_exceeding_console_width(isolated_data_
 
     assert any("super-long-model-name" in line for line in lines)
     assert max(len(line) for line in lines) <= 72
+
+
+def test_telemetry_dashboard_uses_explicit_accounting_labels(isolated_data_dir):
+    store = SessionStore(get_config().resolve_cache_db_path())
+    store.record_usage(
+        UsageEvent(
+            session_id="s-2",
+            model_name="openai/gpt-5.4",
+            input_tokens=4_321,
+            output_tokens=250,
+            effective_saved_tokens=600,
+        )
+    )
+
+    text = _render_text(_build_telemetry_content())
+
+    assert "accounted input" in text
+    assert "saved / reused" in text
+    assert "default request budget" in text
+    assert "mcp tool calls only" in text
+    assert "per-model budget" not in text
+
+
+def test_telemetry_dashboard_overview_uses_rolling_week_window(isolated_data_dir):
+    store = SessionStore(get_config().resolve_cache_db_path())
+    store.record_usage(
+        UsageEvent(
+            session_id="old-event",
+            model_name="openai/gpt-4.1",
+            input_tokens=9_999,
+            output_tokens=111,
+            effective_saved_tokens=222,
+            timestamp=time.time() - (8 * 24 * 60 * 60),
+        )
+    )
+    store.record_usage(
+        UsageEvent(
+            session_id="recent-event",
+            model_name="openai/gpt-5.4",
+            input_tokens=321,
+            output_tokens=45,
+            effective_saved_tokens=67,
+            timestamp=time.time(),
+        )
+    )
+
+    text = _render_text(_build_telemetry_content())
+
+    assert "accounted input" in text
+    assert "321" in text
+    assert "saved / reused" in text
+    assert "67" in text
+    assert "10.1k" not in text
+
+
+def test_session_store_exposes_explicit_and_legacy_usage_fields(isolated_data_dir):
+    store = SessionStore(get_config().resolve_cache_db_path())
+    store.record_usage(
+        UsageEvent(
+            session_id="s-3",
+            model_name="openai/gpt-5.4",
+            input_tokens=100,
+            output_tokens=40,
+            cached_input_tokens=15,
+            uncached_input_tokens=85,
+            effective_saved_tokens=15,
+        )
+    )
+
+    weekly = store.get_weekly_usage()["openai/gpt-5.4"]
+    totals = store.get_all_time_stats()
+
+    assert weekly["accounted_input_tokens"] == 100
+    assert weekly["output_tokens"] == 40
+    assert weekly["saved_tokens"] == 15
+    assert weekly["cached_input_tokens"] == 15
+    assert weekly["live_input_tokens"] == 85
+    assert weekly["activity_tokens"] == 140
+    assert weekly["used"] == 140
+    assert weekly["saved"] == 15
+    assert totals["accounted_input_tokens"] == 100
+    assert totals["activity_tokens"] == 140

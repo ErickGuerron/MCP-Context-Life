@@ -9,10 +9,10 @@ Verifies that:
   5. Model loads on first search/index call
 """
 
-import time
 import tempfile
+import time
 from pathlib import Path
-from unittest.mock import patch, MagicMock
+from unittest.mock import MagicMock, patch
 
 import pyarrow as pa
 import pytest
@@ -149,6 +149,25 @@ def test_load_existing_hashes_uses_projected_arrow_scan(tmp_path):
     assert engine._hashes_loaded is True
 
 
+def test_rag_engine_resolves_default_db_path_at_runtime(monkeypatch, tmp_path):
+    expected_path = tmp_path / "fake-home" / ".mmcp" / "lancedb"
+
+    with patch("mmcp.rag_engine.lancedb") as mock_lancedb:
+        mock_lancedb.connect.return_value = MagicMock()
+
+        import mmcp.rag_engine as rag_module
+
+        monkeypatch.setattr(
+            rag_module.os.path,
+            "expanduser",
+            lambda value: str(expected_path) if value == "~/.mmcp/lancedb" else value,
+        )
+        engine = rag_module.RAGEngine(table_name="test_default_path")
+
+    assert engine.db_path == str(expected_path)
+    assert expected_path.exists()
+
+
 @pytest.mark.slow
 def test_rag_full_lifecycle():
     """
@@ -185,6 +204,6 @@ def test_rag_full_lifecycle():
         assert stats["model_loaded"] is True
         assert stats["total_chunks"] > 0
 
-        print(f"\n[LAZY RAG LIFECYCLE]")
+        print("\n[LAZY RAG LIFECYCLE]")
         print(f"Construction: {construct_ms:.2f}ms")
         print(f"Stats: {stats}")

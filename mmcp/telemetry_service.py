@@ -13,15 +13,29 @@ This module provides:
 from __future__ import annotations
 
 import json
+import os
 import time
 from functools import wraps
+from pathlib import Path
 from typing import Any, Callable
 
+from mmcp.config import get_config
 from mmcp.orchestrator_detector import get_orchestrator_info
 from mmcp.session_store import SessionStore, UsageEvent
 
-# Global singleton repository
-_telemetry_store = SessionStore()
+_telemetry_store: SessionStore | None = None
+_telemetry_store_db_path: Path | None = None
+
+
+def _get_telemetry_store() -> SessionStore:
+    """Resolve the telemetry store lazily so config overrides hit the active DB."""
+    global _telemetry_store, _telemetry_store_db_path
+
+    current_db_path = Path(get_config().resolve_cache_db_path())
+    if _telemetry_store is None or _telemetry_store_db_path != current_db_path:
+        _telemetry_store = SessionStore(current_db_path)
+        _telemetry_store_db_path = current_db_path
+    return _telemetry_store
 
 
 class TelemetryService:
@@ -38,11 +52,172 @@ class TelemetryService:
         only point of change.
         """
         try:
-            _telemetry_store.record_usage(event)
+            _get_telemetry_store().record_usage(event)
         except Exception as e:
             # Telemetry is non-critical path; failing to log shouldn't crash the server
             import logging
+
             logging.error(f"Failed to record telemetry: {e}")
+
+
+def _coerce_int(value: Any, default: int = 0) -> int:
+    """Best-effort integer coercion for telemetry payloads."""
+    try:
+        return int(value)
+    except (TypeError, ValueError):
+        return default
+
+
+def _normalize_model_name(model_name: str | None) -> str:
+    """Normalize telemetry model names from env hints."""
+    value = (model_name or "").strip()
+    return value or "unknown"
+
+
+def _infer_provider_from_model(model_name: str) -> str:
+    """Infer provider from a normalized model name."""
+    lowered = model_name.lower()
+    if lowered == "unknown":
+        return "unknown"
+
+    provider_prefixes = (
+        ("openai/", "openai"),
+        ("anthropic/", "anthropic"),
+        ("google/", "google"),
+        ("gemini/", "google"),
+        ("openrouter/", "openrouter"),
+        ("opencode/", "opencode"),
+        ("gentle/", "gentle-ai"),
+        ("gentle-ai/", "gentle-ai"),
+    )
+    for prefix, provider in provider_prefixes:
+        if lowered.startswith(prefix):
+            return provider
+
+    if lowered.startswith(("gpt-", "o1", "o3", "o4")):
+        return "openai"
+    if lowered.startswith(("claude-", "claude")):
+        return "anthropic"
+    if lowered.startswith(("gemini-", "models/gemini")):
+        return "google"
+
+    return "unknown"
+
+
+def _detect_model_context(orchestrator_name: str) -> tuple[str, str]:
+    """Detect provider/model from inherited host environment variables."""
+    explicit_model_hints = (
+        ("OPENCODE_MODEL", "opencode"),
+        ("GENTLE_MODEL", "gentle-ai"),
+        ("GENTLE_AI_MODEL", "gentle-ai"),
+        ("OPENAI_MODEL", "openai"),
+        ("ANTHROPIC_MODEL", "anthropic"),
+        ("GEMINI_MODEL", "google"),
+        ("GOOGLE_MODEL", "google"),
+        ("OPENROUTER_MODEL", "openrouter"),
+        ("MCP_MODEL", None),
+        ("LLM_MODEL", None),
+        ("MODEL", None),
+    )
+    for env_var, preferred_provider in explicit_model_hints:
+        value = _normalize_model_name(os.environ.get(env_var))
+        if value != "unknown":
+            provider = preferred_provider or _infer_provider_from_model(value)
+            if provider == "unknown" and orchestrator_name in {"opencode", "gentle-ai"}:
+                provider = orchestrator_name
+            return provider, value
+
+    provider_env_fallbacks = (
+        ("OPENAI_API_KEY", "openai"),
+        ("ANTHROPIC_API_KEY", "anthropic"),
+        ("GEMINI_API_KEY", "google"),
+        ("GOOGLE_API_KEY", "google"),
+    )
+    for env_var, provider in provider_env_fallbacks:
+        if os.environ.get(env_var):
+            return provider, f"{provider}/unknown"
+
+    if orchestrator_name == "opencode":
+        return "opencode", "opencode/unknown"
+    if orchestrator_name == "gentle-ai":
+        return "gentle-ai", "gentle-ai/unknown"
+
+    return "unknown", "unknown"
+
+
+def _extract_usage_metrics(payload: Any) -> dict[str, int]:
+    """Extract per-call usage metrics from tool JSON payloads."""
+    usage = {
+        "input_tokens": 0,
+        "output_tokens": 0,
+        "effective_saved_tokens": 0,
+        "cached_input_tokens": 0,
+        "uncached_input_tokens": 0,
+    }
+
+    if not isinstance(payload, dict):
+        return usage
+
+    def _lookup(*path: str) -> Any:
+        current: Any = payload
+        for segment in path:
+            if not isinstance(current, dict):
+                return None
+            current = current.get(segment)
+        return current
+
+    def _first_int(*paths: tuple[str, ...], default: int = 0) -> int:
+        for path in paths:
+            value = _lookup(*path)
+            if value is not None:
+                return _coerce_int(value, default)
+        return default
+
+    if "token_count" in payload:
+        usage["input_tokens"] = _coerce_int(payload.get("token_count"))
+        usage["uncached_input_tokens"] = usage["input_tokens"]
+        return usage
+
+    top_level_or_nested_total = _first_int(
+        ("total_tokens",),
+        ("metrics", "total_tokens"),
+        ("health", "metrics", "total_tokens"),
+    )
+    if top_level_or_nested_total:
+        usage["input_tokens"] = top_level_or_nested_total
+        usage["uncached_input_tokens"] = usage["input_tokens"]
+
+    diagnostics = _lookup("diagnostics")
+    if isinstance(diagnostics, dict):
+        usage["input_tokens"] = _coerce_int(diagnostics.get("original_tokens"), usage["input_tokens"])
+        usage["output_tokens"] = _coerce_int(diagnostics.get("trimmed_tokens"), usage["output_tokens"])
+        usage["effective_saved_tokens"] = _coerce_int(diagnostics.get("tokens_saved"))
+        usage["uncached_input_tokens"] = usage["input_tokens"]
+        return usage
+
+    cache_metadata = _lookup("cache_metadata")
+    if isinstance(cache_metadata, dict):
+        total_tokens = _coerce_int(cache_metadata.get("total_tokens"))
+        static_prefix_tokens = _coerce_int(cache_metadata.get("static_prefix_tokens"))
+        base_prefix_tokens = _coerce_int(cache_metadata.get("base_prefix_tokens"))
+        usage["input_tokens"] = total_tokens
+        usage["output_tokens"] = total_tokens
+
+        if cache_metadata.get("is_cache_hit"):
+            usage["cached_input_tokens"] = static_prefix_tokens
+        elif cache_metadata.get("is_base_cache_hit"):
+            usage["cached_input_tokens"] = base_prefix_tokens
+
+        usage["effective_saved_tokens"] = usage["cached_input_tokens"]
+        usage["uncached_input_tokens"] = max(0, total_tokens - usage["cached_input_tokens"])
+        return usage
+
+    nested_health_total = _first_int(("metrics", "total_tokens"), ("health", "metrics", "total_tokens"))
+    if nested_health_total:
+        usage["input_tokens"] = nested_health_total
+        usage["uncached_input_tokens"] = nested_health_total
+
+    return usage
 
 
 def track_telemetry(tool_name: str) -> Callable:
@@ -51,6 +226,7 @@ def track_telemetry(tool_name: str) -> Callable:
     Ensures that core LLM optimization tools don't violate the Single
     Responsibility Principle (SRP) by knowing about analytics mechanisms.
     """
+
     def decorator(func: Callable) -> Callable:
         @wraps(func)
         def wrapper(*args, **kwargs) -> Any:
@@ -68,21 +244,17 @@ def track_telemetry(tool_name: str) -> Callable:
                 _process_telemetry_event(tool_name, latency_ms, args, kwargs, result)
             except Exception as e:
                 import logging
+
                 logging.warning(f"Telemetry extraction failed for {tool_name}: {e}")
 
             return result
 
         return wrapper
+
     return decorator
 
 
-def _process_telemetry_event(
-    tool_name: str,
-    latency_ms: float,
-    args: tuple,
-    kwargs: dict,
-    result: Any
-) -> None:
+def _process_telemetry_event(tool_name: str, latency_ms: float, args: tuple, kwargs: dict, result: Any) -> None:
     """
     Internal helper to construct the UsageEvent by inspecting
     input parameters and the JSON output of the tools.
@@ -91,58 +263,35 @@ def _process_telemetry_event(
     orchestrator = get_orchestrator_info()
     host_name = "context-life-server"
     agent_name = "UnknownAgent"
-    
+
     # Use orchestrator detection to identify the calling agent
     if orchestrator.is_detected:
         agent_name = orchestrator.orchestrator_name
 
-    # Default baseline stats
-    input_tokens = 0
-    output_tokens = 0
-    effective_saved = 0
-    model_name = "local" # We default to local if unspecified, MCP tools generally don't know the remote model
-    
-    # Try to parse the result if it's JSON (most of our tools return JSON strings)
+    provider_name, model_name = _detect_model_context(agent_name)
+    payload = result
     try:
         if isinstance(result, str):
-            parsed = json.loads(result)
-            
-            # Tools like `count_messages_tokens_tool` or `count_tokens_tool`
-            if "token_count" in parsed:
-                input_tokens = parsed["token_count"]
-            elif "total_tokens" in parsed:
-                input_tokens = parsed["total_tokens"]
-                
-            # Tools like `optimize_messages` or `cache_context`
-            if "metrics" in parsed:
-                metrics = parsed["metrics"]
-                input_tokens = metrics.get("total_tokens", 0)
-                output_tokens = metrics.get("reduced_tokens", 0)
-                if "cache_savings" in metrics:
-                    effective_saved = metrics["cache_savings"]
-                else:
-                    # Generic trimming savings
-                    effective_saved = input_tokens - output_tokens
-                    
-            # Identify model if they pass it inside the message context? 
-            # For now, MCP servers don't naturally see 'model_name'.
-            # We map context budget actions as specific to standard budget operations.
-            model_name = "context-life-mcp" 
+            payload = json.loads(result)
     except Exception:
         pass
 
+    usage_metrics = _extract_usage_metrics(payload)
+
     event = UsageEvent(
         session_id=str(int(time.time())),  # Session proxy
-        input_tokens=input_tokens,
-        output_tokens=abs(output_tokens),
-        effective_saved_tokens=max(0, effective_saved),
+        input_tokens=max(0, usage_metrics["input_tokens"]),
+        output_tokens=max(0, usage_metrics["output_tokens"]),
+        cached_input_tokens=max(0, usage_metrics["cached_input_tokens"]),
+        uncached_input_tokens=max(0, usage_metrics["uncached_input_tokens"]),
+        effective_saved_tokens=max(0, usage_metrics["effective_saved_tokens"]),
         host_name=host_name,
         agent_name=agent_name,
-        provider_name="local",
+        provider_name=provider_name,
         model_name=model_name,
         tool_name=tool_name,
         latency_ms=round(latency_ms, 2),
-        timestamp=time.time()
+        timestamp=time.time(),
     )
 
     # 5. Delegate to domain service

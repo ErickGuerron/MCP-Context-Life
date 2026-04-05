@@ -1,13 +1,13 @@
-import time
 import statistics
 import tempfile
+import time
 from pathlib import Path
 
 import pytest
 
-from mmcp.token_counter import count_tokens, count_messages_tokens
-from mmcp.trim_history import trim_messages
 from mmcp.rag_engine import RAGEngine
+from mmcp.token_counter import count_messages_tokens, count_tokens
+from mmcp.trim_history import trim_messages
 
 # --- 1. VERIFICACIÓN DE EXACTITUD (TRUTHFULNESS) ---
 
@@ -63,7 +63,7 @@ def test_rag_performance_and_recall():
 
         search_ms = (end_search - start_search) * 1000
 
-        print(f"\n[RAG BENCHMARK]")
+        print("\n[RAG BENCHMARK]")
         print(f"Cold Init: {cold_init_ms:.2f}ms")
         print(f"Search Latency: {search_ms:.2f}ms")
 

@@ -56,3 +56,39 @@ def test_prewarm_rag_now_explicitly_warms_manual_mode(monkeypatch, isolated_data
     assert result["model_loaded"] is True
     assert server._rag_engine is not None
     assert server._rag_engine.prewarm_calls == 1
+
+
+def test_initialize_runtime_reacts_to_warmup_mode_changes_without_reset(monkeypatch, isolated_data_dir):
+    cfg = get_config()
+    monkeypatch.setattr(server, "RAGEngine", FakeRAGEngine)
+    server.reset_runtime_state()
+
+    cfg.rag_warmup_mode = "lazy"
+    first = server.initialize_runtime()
+
+    cfg.rag_warmup_mode = "startup"
+    second = server.initialize_runtime()
+
+    assert first["status"] == "initialized"
+    assert first["prewarmed"] is False
+    assert second["status"] == "initialized"
+    assert second["mode"] == "startup"
+    assert second["prewarmed"] is True
+    assert server._rag_engine is not None
+    assert server._rag_engine.prewarm_calls == 1
+
+
+def test_get_rag_engine_rebuilds_when_rag_config_changes(monkeypatch, isolated_data_dir, tmp_path):
+    cfg = get_config()
+    monkeypatch.setattr(server, "RAGEngine", FakeRAGEngine)
+    server.reset_runtime_state()
+
+    cfg.data_dir = str(tmp_path / "rag-a")
+    first_engine = server._get_rag_engine()
+
+    cfg.data_dir = str(tmp_path / "rag-b")
+    second_engine = server._get_rag_engine()
+
+    assert first_engine is not second_engine
+    assert first_engine.db_path.endswith(("rag-a\\lancedb", "rag-a/lancedb"))
+    assert second_engine.db_path.endswith(("rag-b\\lancedb", "rag-b/lancedb"))

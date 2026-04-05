@@ -18,9 +18,9 @@ import subprocess
 import sys
 import urllib.request
 from dataclasses import dataclass, field
+from importlib.metadata import version as pkg_version
 from inspect import Parameter, signature
 from io import StringIO
-from importlib.metadata import version as pkg_version
 from pathlib import Path
 from typing import Callable
 
@@ -1690,52 +1690,45 @@ def _build_telemetry_content():
     store = SessionStore(cfg.resolve_cache_db_path())
 
     weekly = store.get_weekly_usage()
-    all_time = store.get_all_time_stats()
+    recent = store.get_recent_stats(days=7)
 
-    total_processed = all_time["used"] + all_time["saved"]
-    savings_pct = (all_time["saved"] / total_processed * 100) if total_processed > 0 else 0.0
+    accounted_input = recent["accounted_input_tokens"]
+    output_tokens = recent["output_tokens"]
+    saved_tokens = recent["saved_tokens"]
+    savings_pct = (saved_tokens / accounted_input * 100) if accounted_input > 0 else 0.0
     budget = cfg.token_budget_default
     usage_lines: list[str] = []
     if not weekly:
         usage_lines.append("[dim]No usage data for the last 7 days.[/]")
     else:
-        sorted_models = sorted(weekly.items(), key=lambda item: item[1]["used"], reverse=True)
+        sorted_models = sorted(weekly.items(), key=lambda item: item[1]["accounted_input_tokens"], reverse=True)
         for model_name, data in sorted_models[:6]:
-            used = data["used"]
-            remaining = max(0, budget - used)
-
-            if remaining < (budget * 0.15):
-                color = "red"
-                status = "[bold red]CRITICAL[/]"
-            elif remaining < (budget * 0.30):
-                color = "yellow"
-                status = "[bold yellow]WARNING[/]"
-            else:
-                color = "green"
-                status = "[bold green]OK[/]"
-
+            used = data["accounted_input_tokens"]
+            transformed = data["output_tokens"]
+            saved = data["saved_tokens"]
             usage_lines.append(
-                f"[bold]{model_name}[/] — used [{color}]{format_big_number(used)}[/] / "
-                f"budget {format_big_number(budget)} • left [{color}]{format_big_number(remaining)}[/] • {status}"
+                f"[bold]{model_name}[/] — input {format_big_number(used)} • "
+                f"output {format_big_number(transformed)} • saved {format_big_number(saved)}"
             )
         if len(sorted_models) > 6:
             usage_lines.append(f"[dim]+ {len(sorted_models) - 6} more model(s) not shown[/]")
 
     return _stack_renderables(
         _compact_panel(
-            "💰 Savings",
+            "💰 Telemetry",
             [
-                ("Processed", format_big_number(total_processed)),
-                ("Saved", f"[green]{format_big_number(all_time['saved'])}[/]"),
-                ("Savings rate", f"[bold green]{savings_pct:.1f}%[/]"),
+                ("Accounted input", format_big_number(accounted_input)),
+                ("Output", format_big_number(output_tokens)),
+                ("Saved / reused", f"[green]{format_big_number(saved_tokens)}[/]"),
+                ("Savings vs input", f"[bold green]{savings_pct:.1f}%[/]"),
             ],
             border_style="green",
         ),
         _compact_panel(
-            "📅 Budget",
+            "📅 Budget reference",
             [
                 ("Window", "Rolling 7 days"),
-                ("Per-model budget", format_big_number(budget)),
+                ("Default request budget", format_big_number(budget)),
                 ("Tracked models", str(len(weekly))),
             ],
             border_style="blue",
@@ -1745,7 +1738,9 @@ def _build_telemetry_content():
             "Notes",
             [
                 "Rolling 7-day window recalculates automatically.",
-                "Budget limits apply per distinct model string.",
+                "Telemetry tracks Context-Life MCP tool calls only, not host LLM billing/cache telemetry.",
+                "Input/output/saved now use explicit accounting semantics.",
+                "Budget is a per-request reference ceiling, not a weekly quota.",
             ],
             border_style="dim",
         ),
@@ -1761,33 +1756,25 @@ def _build_telemetry_pages() -> list[DetailPage]:
     store = SessionStore(cfg.resolve_cache_db_path())
 
     weekly = store.get_weekly_usage()
-    all_time = store.get_all_time_stats()
+    recent = store.get_recent_stats(days=7)
 
-    total_processed = all_time["used"] + all_time["saved"]
-    savings_pct = (all_time["saved"] / total_processed * 100) if total_processed > 0 else 0.0
+    accounted_input = recent["accounted_input_tokens"]
+    output_tokens = recent["output_tokens"]
+    saved_tokens = recent["saved_tokens"]
+    savings_pct = (saved_tokens / accounted_input * 100) if accounted_input > 0 else 0.0
     budget = cfg.token_budget_default
     usage_lines: list[str] = []
     if not weekly:
         usage_lines.append("[dim]No usage data for the last 7 days.[/]")
     else:
-        sorted_models = sorted(weekly.items(), key=lambda item: item[1]["used"], reverse=True)
+        sorted_models = sorted(weekly.items(), key=lambda item: item[1]["accounted_input_tokens"], reverse=True)
         for model_name, data in sorted_models:
-            used = data["used"]
-            remaining = max(0, budget - used)
-
-            if remaining < (budget * 0.15):
-                color = "red"
-                status = "[bold red]CRITICAL[/]"
-            elif remaining < (budget * 0.30):
-                color = "yellow"
-                status = "[bold yellow]WARNING[/]"
-            else:
-                color = "green"
-                status = "[bold green]OK[/]"
-
+            used = data["accounted_input_tokens"]
+            transformed = data["output_tokens"]
+            saved = data["saved_tokens"]
             usage_lines.append(
-                f"[bold]{model_name}[/] — used [{color}]{format_big_number(used)}[/] / "
-                f"budget {format_big_number(budget)} • left [{color}]{format_big_number(remaining)}[/] • {status}"
+                f"[bold]{model_name}[/] — input {format_big_number(used)} • "
+                f"output {format_big_number(transformed)} • saved {format_big_number(saved)}"
             )
 
     return [
@@ -1795,19 +1782,20 @@ def _build_telemetry_pages() -> list[DetailPage]:
             title="Overview",
             renderable_builder=lambda: _stack_renderables(
                 _compact_panel(
-                    "💰 Savings",
+                    "💰 Telemetry",
                     [
-                        ("Processed", format_big_number(total_processed)),
-                        ("Saved", f"[green]{format_big_number(all_time['saved'])}[/]"),
-                        ("Savings rate", f"[bold green]{savings_pct:.1f}%[/]"),
+                        ("Accounted input", format_big_number(accounted_input)),
+                        ("Output", format_big_number(output_tokens)),
+                        ("Saved / reused", f"[green]{format_big_number(saved_tokens)}[/]"),
+                        ("Savings vs input", f"[bold green]{savings_pct:.1f}%[/]"),
                     ],
                     border_style="green",
                 ),
                 _compact_panel(
-                    "📅 Budget",
+                    "📅 Budget reference",
                     [
                         ("Window", "Rolling 7 days"),
-                        ("Per-model budget", format_big_number(budget)),
+                        ("Default request budget", format_big_number(budget)),
                         ("Tracked models", str(len(weekly))),
                     ],
                     border_style="blue",
@@ -1822,7 +1810,9 @@ def _build_telemetry_pages() -> list[DetailPage]:
                     "Notes",
                     [
                         "Rolling 7-day window recalculates automatically.",
-                        "Budget limits apply per distinct model string.",
+                        "Telemetry tracks Context-Life MCP tool calls only, not host LLM billing/cache telemetry.",
+                        "Input/output/saved now use explicit accounting semantics.",
+                        "Budget is a per-request reference ceiling, not a weekly quota.",
                     ],
                     border_style="dim",
                 ),

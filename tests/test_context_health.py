@@ -13,16 +13,13 @@ Verifies:
 
 import json
 
-import pytest
-
+from mmcp.token_counter import count_messages_tokens
 from mmcp.trim_history import (
-    analyze_context_health,
-    ContextHealthReport,
     _compute_redundancy_ratio,
     _compute_system_to_user_ratio,
     _estimate_noise,
+    analyze_context_health,
 )
-from mmcp.token_counter import count_messages_tokens
 
 
 class TestHealthScoreRanges:

@@ -19,17 +19,16 @@ from __future__ import annotations
 import hashlib
 import os
 import re
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Optional
 
 import lancedb
 import pyarrow.compute as pc
 
-from mmcp.token_counter import count_tokens, DEFAULT_ENCODING
+from mmcp.token_counter import DEFAULT_ENCODING, count_tokens
 
 # --- Configuration ---
-DEFAULT_DB_PATH = os.path.expanduser("~/.mmcp/lancedb")
 DEFAULT_TABLE_NAME = "knowledge"
 DEFAULT_EMBEDDING_MODEL = "paraphrase-multilingual-MiniLM-L12-v2"
 DEFAULT_CHUNK_SIZE = 512
@@ -167,20 +166,21 @@ class RAGEngine:
 
     def __init__(
         self,
-        db_path: str = DEFAULT_DB_PATH,
+        db_path: Optional[str] = None,
         table_name: str = DEFAULT_TABLE_NAME,
         embedding_model: str = DEFAULT_EMBEDDING_MODEL,
         chunk_size: int = DEFAULT_CHUNK_SIZE,
         chunk_overlap: int = DEFAULT_CHUNK_OVERLAP,
     ):
-        self.db_path = db_path
+        resolved_db_path = db_path or os.path.expanduser("~/.mmcp/lancedb")
+        self.db_path = resolved_db_path
         self.table_name = table_name
         self.chunk_size = chunk_size
         self.chunk_overlap = chunk_overlap
         self._embedding_model_name = embedding_model
 
         # Ensure DB directory exists
-        Path(db_path).mkdir(parents=True, exist_ok=True)
+        Path(resolved_db_path).mkdir(parents=True, exist_ok=True)
 
         # RFC-002 P1: These are ALL deferred — no model loading here
         self._embedding_fn = None
@@ -188,7 +188,7 @@ class RAGEngine:
         self._model_loaded = False
 
         # Connect to LanceDB (lightweight — no model needed)
-        self._db = lancedb.connect(db_path)
+        self._db = lancedb.connect(resolved_db_path)
         self._table = None
 
         # P3: Track indexed file hashes in memory for fast dedup checks
@@ -354,7 +354,7 @@ class RAGEngine:
 
         # P3: If force re-index, remove old chunks first
         if force and self._is_hash_indexed(file_hash):
-            removed = self._remove_by_hash(file_hash)
+            self._remove_by_hash(file_hash)
 
         # Read file content
         with open(filepath, "r", encoding="utf-8", errors="replace") as f:

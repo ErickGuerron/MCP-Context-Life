@@ -92,10 +92,7 @@ def get_encoder(encoding_name: str = DEFAULT_ENCODING) -> tiktoken.Encoding:
     repeated tiktoken.get_encoding() calls.
     """
     if encoding_name not in SUPPORTED_ENCODINGS:
-        raise ValueError(
-            f"Unsupported encoding '{encoding_name}'. "
-            f"Supported: {SUPPORTED_ENCODINGS}"
-        )
+        raise ValueError(f"Unsupported encoding '{encoding_name}'. Supported: {SUPPORTED_ENCODINGS}")
 
     if encoding_name not in _encoder_cache:
         _encoder_cache[encoding_name] = tiktoken.get_encoding(encoding_name)
@@ -104,6 +101,7 @@ def get_encoder(encoding_name: str = DEFAULT_ENCODING) -> tiktoken.Encoding:
 
 
 # --- RFC-002 P2: LRU-cached token counting ---
+
 
 @lru_cache(maxsize=_LRU_CACHE_SIZE)
 def _cached_count(text: str, encoding_name: str) -> int:
