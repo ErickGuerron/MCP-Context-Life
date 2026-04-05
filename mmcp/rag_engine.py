@@ -24,6 +24,7 @@ from pathlib import Path
 from typing import Optional
 
 import lancedb
+import pyarrow.compute as pc
 
 from mmcp.token_counter import count_tokens, DEFAULT_ENCODING
 
@@ -267,11 +268,26 @@ class RAGEngine:
         """
         try:
             table = self._get_or_create_table()
-            df = table.to_pandas()
-            if "file_hash" in df.columns:
-                self._indexed_hashes = set(df["file_hash"].unique())
+
+            # Prefer a projected scan so we don't materialize full rows
+            # (especially vectors/text) just to rebuild the hash cache.
+            hash_table = table.search().select(["file_hash"]).to_arrow()
+            if "file_hash" in hash_table.column_names:
+                unique_hashes = pc.unique(hash_table["file_hash"]).drop_null()
+                self._indexed_hashes = set(unique_hashes.to_pylist())
+            else:
+                self._indexed_hashes = set()
         except Exception:
-            self._indexed_hashes = set()
+            try:
+                # Fallback for older LanceDB/query-builder behavior.
+                table = self._get_or_create_table()
+                df = table.to_pandas()
+                if "file_hash" in df.columns:
+                    self._indexed_hashes = set(df["file_hash"].dropna().unique())
+                else:
+                    self._indexed_hashes = set()
+            except Exception:
+                self._indexed_hashes = set()
         self._hashes_loaded = True
 
     def _is_hash_indexed(self, file_hash: str) -> bool:

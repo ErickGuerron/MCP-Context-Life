@@ -12,8 +12,9 @@ They MUST NOT silently alter the semantic contract of tool outputs.
 
 from __future__ import annotations
 
+import json
 import os
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Optional
 
@@ -45,6 +46,114 @@ def _default_data_path() -> Path:
     return base / "context-life"
 
 
+VALID_RAG_WARMUP_MODES = ("lazy", "startup", "manual")
+
+
+def normalize_rag_warmup_mode(value: object) -> str:
+    """Normalize RAG warmup mode values, defaulting safely to lazy."""
+    if not isinstance(value, str):
+        return "lazy"
+
+    normalized = value.strip().lower()
+    if normalized in VALID_RAG_WARMUP_MODES:
+        return normalized
+    return "lazy"
+
+
+def get_rag_warmup_mode_details(mode: Optional[str] = None) -> dict:
+    """Return UX copy that explains each RAG warmup mode and its MCP impact."""
+    current_mode = normalize_rag_warmup_mode(mode)
+    modes = {
+        "lazy": {
+            "label": "Lazy (default)",
+            "startup_impact": "Fast MCP startup — no embedding model load during boot.",
+            "first_use_impact": "First RAG search/index pays the model load cost.",
+            "resource_impact": "Lowest idle CPU/RAM usage until RAG is used.",
+            "mcp_impact": "Best default for general MCP usage when RAG might not be needed every session.",
+        },
+        "startup": {
+            "label": "Startup",
+            "startup_impact": "Slower MCP startup — prewarms embeddings during server boot.",
+            "first_use_impact": "First RAG search/index is warm and ready sooner.",
+            "resource_impact": "Higher upfront CPU/RAM cost because the model loads immediately.",
+            "mcp_impact": "Useful when this MCP is expected to serve RAG right away on most sessions.",
+        },
+        "manual": {
+            "label": "Manual",
+            "startup_impact": "Fast MCP startup — never prewarms automatically.",
+            "first_use_impact": "RAG stays cold until you explicitly prewarm or perform the first RAG action.",
+            "resource_impact": "Keeps idle resource usage low and gives the user explicit control.",
+            "mcp_impact": "Best when the operator wants full control over when the MCP spends warmup time.",
+        },
+    }
+
+    return {
+        "current_mode": current_mode,
+        "current": {"mode": current_mode, **modes[current_mode]},
+        "modes": modes,
+    }
+
+
+def _toml_literal(value: object) -> str:
+    """Serialize a primitive Python value into TOML syntax."""
+    if isinstance(value, bool):
+        return "true" if value else "false"
+    if isinstance(value, (int, float)):
+        return str(value)
+    return json.dumps(str(value))
+
+
+def save_config(config: "CLConfig", config_path: Optional[str] = None) -> Path:
+    """Persist the current configuration to TOML."""
+    path = Path(config_path) if config_path else _default_config_path()
+    path.parent.mkdir(parents=True, exist_ok=True)
+
+    sections = [
+        (
+            "rag",
+            {
+                "db_path": config.rag_db_path,
+                "table_name": config.rag_table_name,
+                "top_k": config.rag_top_k,
+                "min_score": config.rag_min_score,
+                "max_chunks_per_source": config.rag_max_chunks_per_source,
+                "chunk_size": config.rag_chunk_size,
+                "chunk_overlap": config.rag_chunk_overlap,
+                "warmup_mode": normalize_rag_warmup_mode(config.rag_warmup_mode),
+            },
+        ),
+        (
+            "token_budget",
+            {
+                "default": config.token_budget_default,
+                "safety_buffer": config.token_budget_safety_buffer,
+            },
+        ),
+        ("trim", {"preserve_recent": config.trim_preserve_recent}),
+        (
+            "cache",
+            {
+                "max_entries": config.cache_max_entries,
+                "db_path": config.cache_db_path,
+                "rag_thrash_threshold": config.cache_rag_thrash_threshold,
+                "rag_bypass_cooldown": config.cache_rag_bypass_cooldown,
+            },
+        ),
+        ("paths", {"data_dir": config.data_dir}),
+        ("upgrade", {"github_repo": config.github_repo}),
+    ]
+
+    lines: list[str] = []
+    for section, values in sections:
+        lines.append(f"[{section}]")
+        for key, value in values.items():
+            lines.append(f"{key} = {_toml_literal(value)}")
+        lines.append("")
+
+    path.write_text("\n".join(lines).rstrip() + "\n", encoding="utf-8")
+    return path
+
+
 @dataclass
 class CLConfig:
     """Context-Life runtime configuration."""
@@ -57,6 +166,7 @@ class CLConfig:
     rag_max_chunks_per_source: int = 0
     rag_chunk_size: int = 512
     rag_chunk_overlap: int = 64
+    rag_warmup_mode: str = "lazy"
 
     # --- Token Budget ---
     token_budget_default: int = 128000
@@ -109,6 +219,7 @@ def _env_override(config: CLConfig) -> None:
         "CL_RAG_MAX_CHUNKS_PER_SOURCE": ("rag_max_chunks_per_source", int),
         "CL_RAG_CHUNK_SIZE": ("rag_chunk_size", int),
         "CL_RAG_CHUNK_OVERLAP": ("rag_chunk_overlap", int),
+        "CL_RAG_WARMUP_MODE": ("rag_warmup_mode", str),
         "CL_TOKEN_BUDGET_DEFAULT": ("token_budget_default", int),
         "CL_TOKEN_BUDGET_SAFETY_BUFFER": ("token_budget_safety_buffer", int),
         "CL_TRIM_PRESERVE_RECENT": ("trim_preserve_recent", int),
@@ -127,6 +238,8 @@ def _env_override(config: CLConfig) -> None:
                 setattr(config, attr, cast(val))
             except (ValueError, TypeError):
                 pass  # Silently ignore bad env values
+
+    config.rag_warmup_mode = normalize_rag_warmup_mode(config.rag_warmup_mode)
 
 
 def _load_toml(path: Path) -> dict:
@@ -166,6 +279,8 @@ def load_config(config_path: Optional[str] = None) -> CLConfig:
         ):
             if key in rag:
                 setattr(config, f"rag_{key}", rag[key])
+        if "warmup_mode" in rag:
+            config.rag_warmup_mode = normalize_rag_warmup_mode(rag["warmup_mode"])
 
         token = data.get("token_budget", {})
         if "default" in token:
@@ -197,6 +312,7 @@ def load_config(config_path: Optional[str] = None) -> CLConfig:
 
     # Tier 3: Environment overrides (highest priority)
     _env_override(config)
+    config.rag_warmup_mode = normalize_rag_warmup_mode(config.rag_warmup_mode)
 
     return config
 

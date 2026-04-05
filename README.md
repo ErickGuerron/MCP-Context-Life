@@ -108,6 +108,10 @@ context-life serve                     # Start MCP server (stdio)
 context-life serve --http              # Start MCP server (HTTP)
 context-life info                      # System info, config, dependencies
 context-life doctor                    # Environment diagnostics
+context-life warmup                    # Explain RAG warmup mode + current setting
+context-life warmup set startup        # Persist warmup mode: lazy|startup|manual
+context-life warmup interactive        # Interactive selector for warmup mode + prewarm
+context-life prewarm                   # Explicitly warm the RAG model now
 context-life upgrade                   # Upgrade to latest GitHub release
 context-life upgrade --version v0.6.0  # Install specific version
 context-life upgrade --dry-run         # Check without installing
@@ -296,6 +300,7 @@ top_k = 5
 min_score = 0.3
 max_chunks_per_source = 3
 chunk_size = 512
+warmup_mode = "lazy"
 
 [token_budget]
 default = 128000
@@ -312,9 +317,18 @@ data_dir = "~/.local/share/context-life"
 
 ```bash
 export CL_RAG_TOP_K=10
+export CL_RAG_WARMUP_MODE=startup
 export CL_TOKEN_BUDGET_DEFAULT=64000
 export CL_DATA_DIR=/custom/path
 ```
+
+### RAG warmup modes
+
+- `lazy` *(default)* — fast MCP startup, but the first RAG search/index pays the model load cost.
+- `startup` — slower MCP startup because the model is prewarmed during boot, but first RAG use is faster.
+- `manual` — never prewarms automatically; use `context-life prewarm` or the `prewarm_rag` MCP tool when you want to warm it explicitly.
+
+If you prefer not to memorize commands, run `context-life warmup interactive` or open `context-life tui` and choose **RAG Warmup Selector**. From there you can inspect MCP impact, switch between `lazy` / `startup` / `manual`, and optionally trigger a manual prewarm immediately.
 
 ---
 

@@ -14,6 +14,7 @@ import tempfile
 from pathlib import Path
 from unittest.mock import patch, MagicMock
 
+import pyarrow as pa
 import pytest
 
 
@@ -117,6 +118,35 @@ def test_index_directory_walks_filesystem_once(tmp_path, monkeypatch):
     assert indexed_paths == ["keep.py", "keep.md"]
     assert result["indexed"] == 2
     assert result["skipped"] == 0
+
+
+def test_load_existing_hashes_uses_projected_arrow_scan(tmp_path):
+    """_load_existing_hashes() should scan only file_hash via Arrow projection."""
+    with patch("mmcp.rag_engine.lancedb") as mock_lancedb:
+        mock_lancedb.connect.return_value = MagicMock()
+
+        import mmcp.rag_engine as rag_module
+
+        engine = rag_module.RAGEngine(db_path=str(tmp_path / "db"), table_name="test_hashes")
+
+    query = MagicMock()
+    query.select.return_value = query
+    query.to_arrow.return_value = pa.table({"file_hash": ["hash-a", "hash-a", None, "hash-b"]})
+
+    table = MagicMock()
+    table.search.return_value = query
+    table.to_pandas.side_effect = AssertionError("projected Arrow scan should avoid to_pandas")
+
+    engine._table = table
+    engine._model_loaded = True
+
+    engine._load_existing_hashes()
+
+    table.search.assert_called_once_with()
+    query.select.assert_called_once_with(["file_hash"])
+    query.to_arrow.assert_called_once_with()
+    assert engine._indexed_hashes == {"hash-a", "hash-b"}
+    assert engine._hashes_loaded is True
 
 
 @pytest.mark.slow

@@ -19,8 +19,10 @@ from typing import Optional
 from mcp.server.fastmcp import FastMCP
 
 from mmcp.cache_manager import CacheLoop
+from mmcp.config import get_config, get_rag_warmup_mode_details
 from mmcp.orchestrator_detector import get_orchestrator_info
 from mmcp.rag_engine import RAGEngine
+from mmcp.telemetry_service import track_telemetry
 from mmcp.token_counter import (
     DEFAULT_ENCODING,
     TokenBudget,
@@ -29,7 +31,6 @@ from mmcp.token_counter import (
     get_cache_info,
 )
 from mmcp.trim_history import analyze_context_health, trim_messages
-from mmcp.telemetry_service import track_telemetry
 
 # --- Server Instance ---
 mcp = FastMCP(
@@ -45,14 +46,78 @@ mcp = FastMCP(
 _token_budget = TokenBudget()
 _rag_engine: Optional[RAGEngine] = None
 _cache_loop = CacheLoop()
+_runtime_initialized = False
 
 
 def _get_rag_engine() -> RAGEngine:
     """Lazy initialization of the RAG engine."""
     global _rag_engine
     if _rag_engine is None:
-        _rag_engine = RAGEngine()
+        cfg = get_config()
+        _rag_engine = RAGEngine(
+            db_path=cfg.resolve_rag_db_path(),
+            table_name=cfg.rag_table_name,
+            chunk_size=cfg.rag_chunk_size,
+            chunk_overlap=cfg.rag_chunk_overlap,
+        )
     return _rag_engine
+
+
+def initialize_runtime(force: bool = False) -> dict:
+    """Apply configured startup behavior for RAG warmup."""
+    global _runtime_initialized
+
+    cfg = get_config()
+    mode = cfg.rag_warmup_mode
+    details = get_rag_warmup_mode_details(mode)
+
+    if _runtime_initialized and not force:
+        return {
+            "status": "already_initialized",
+            "mode": mode,
+            "prewarmed": _rag_engine is not None and _rag_engine._model_loaded,
+            "mcp_impact": details["current"]["mcp_impact"],
+        }
+
+    prewarmed = False
+    if mode == "startup":
+        engine = _get_rag_engine()
+        if not engine._model_loaded:
+            engine.prewarm()
+        prewarmed = engine._model_loaded
+
+    _runtime_initialized = True
+    return {
+        "status": "initialized",
+        "mode": mode,
+        "prewarmed": prewarmed,
+        "mcp_impact": details["current"]["mcp_impact"],
+    }
+
+
+def prewarm_rag_now() -> dict:
+    """Explicitly prewarm the RAG model on demand."""
+    engine = _get_rag_engine()
+    already_loaded = engine._model_loaded
+    if not already_loaded:
+        engine.prewarm()
+
+    return {
+        "status": "ready",
+        "mode": get_config().rag_warmup_mode,
+        "already_loaded": already_loaded,
+        "model_loaded": engine._model_loaded,
+        "message": "RAG embedding model is warm and ready for the next MCP search/index call.",
+    }
+
+
+def reset_runtime_state() -> None:
+    """Reset module runtime singletons for tests."""
+    global _rag_engine, _runtime_initialized, _token_budget, _cache_loop
+    _rag_engine = None
+    _runtime_initialized = False
+    _token_budget = TokenBudget()
+    _cache_loop = CacheLoop()
 
 
 # ============================================================
@@ -293,6 +358,17 @@ def cache_context(
 
 
 @mcp.tool()
+def prewarm_rag() -> str:
+    """
+    Explicitly prewarm the local RAG embedding model.
+
+    Useful when warmup mode is `manual` or `lazy` and you want the next
+    MCP RAG request to avoid the first-use cold-start cost.
+    """
+    return json.dumps(prewarm_rag_now())
+
+
+@mcp.tool()
 def rag_stats() -> str:
     """
     Get statistics about the indexed RAG knowledge base.
@@ -460,6 +536,21 @@ def rag_stats_resource() -> str:
     """RAG knowledge base statistics: total chunks, database info."""
     engine = _get_rag_engine()
     return json.dumps(engine.stats())
+
+
+@mcp.resource("status://rag_warmup")
+def rag_warmup_resource() -> str:
+    """RAG warmup mode, impact, and current runtime state."""
+    details = get_rag_warmup_mode_details(get_config().rag_warmup_mode)
+    return json.dumps(
+        {
+            "current_mode": details["current_mode"],
+            "current": details["current"],
+            "modes": details["modes"],
+            "engine_initialized": _rag_engine is not None,
+            "model_loaded": _rag_engine._model_loaded if _rag_engine is not None else False,
+        }
+    )
 
 
 @mcp.resource("status://orchestrator")
