@@ -176,12 +176,12 @@ jobs:
 
       - name: Verify CLI and imports in single container run
         run: |
-          docker run --rm --entrypoint sh context-life:test -lc '
+          docker run --rm --entrypoint sh context-life:test -lc "
             context-life version &&
             context-life info >/tmp/context-life-info.txt &&
             context-life doctor >/tmp/context-life-doctor.txt &&
-            python -c "from mmcp.token_counter import count_tokens; from mmcp.trim_history import trim_messages; from mmcp.config import get_config; print(\"✅ All imports OK\"); print(f\"Token count test: {count_tokens('hello world')}\"); cfg = get_config(); print(f\"Config loaded: budget={cfg.token_budget_default}\")"
-          '
+            python -c 'from mmcp.token_counter import count_tokens; from mmcp.trim_history import trim_messages; from mmcp.config import get_config; print("✅ All imports OK"); print("Token count test:", count_tokens("hello world")); cfg = get_config(); print(f"Config loaded: budget={cfg.token_budget_default}")'
+          "
 
   # ──────────────────────────────────────────────────
   # Job 5: Install from GitHub URL (integration test)

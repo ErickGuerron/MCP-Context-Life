@@ -1,3 +1,4 @@
+import os
 from pathlib import Path
 
 from mmcp.config import load_config, save_config
@@ -41,7 +42,10 @@ def test_save_config_persists_rag_warmup_mode(tmp_path: Path):
 
 def test_save_config_default_path_preserves_existing_user_paths(tmp_path: Path, monkeypatch):
     config_root = tmp_path / "config-home"
-    monkeypatch.setenv("APPDATA", str(config_root))
+    if os.name == "nt":
+        monkeypatch.setenv("APPDATA", str(config_root))
+    else:
+        monkeypatch.setenv("XDG_CONFIG_HOME", str(config_root))
 
     config_path = config_root / "context-life" / "config.toml"
     config_path.parent.mkdir(parents=True, exist_ok=True)
