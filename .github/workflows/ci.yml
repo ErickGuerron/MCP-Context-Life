@@ -55,6 +55,7 @@ jobs:
   test-install:
     name: "📦 Test Install (${{ matrix.os }} / Python ${{ matrix.python-version }})"
     strategy:
+      fail-fast: false
       matrix:
         os: [ubuntu-latest, macos-latest, windows-latest]
         python-version: ["3.10", "3.11", "3.12"]
@@ -109,6 +110,12 @@ jobs:
           cfg = get_config()
           print(f'Config loaded: budget={cfg.token_budget_default}')
           "
+
+      - name: Run Ruff checks
+        if: matrix.os == 'ubuntu-latest' && matrix.python-version == '3.12'
+        run: |
+          ruff check .
+          ruff format --check .
 
       - name: Run pytest suite
         if: matrix.os == 'ubuntu-latest' && matrix.python-version == '3.12'
@@ -167,32 +174,9 @@ jobs:
           cache-from: type=gha
           cache-to: type=gha,mode=min
 
-      - name: Verify CLI in container
+      - name: Verify CLI and imports in single container run
         run: |
-          docker run --rm context-life:test version
-          echo "✅ CLI works inside Docker"
-
-      - name: Run context-life info in container
-        run: |
-          docker run --rm context-life:test info
-          echo "✅ Info command works"
-
-      - name: Run context-life doctor in container
-        run: |
-          docker run --rm context-life:test doctor
-          echo "✅ Doctor command works"
-
-      - name: Verify module imports in container
-        run: |
-          docker run --rm --entrypoint python context-life:test -c "
-          from mmcp.token_counter import count_tokens
-          from mmcp.trim_history import trim_messages
-          from mmcp.config import get_config
-          print('✅ All imports OK')
-          print(f'Token count test: {count_tokens(\"hello world\")}')
-          cfg = get_config()
-          print(f'Config loaded: budget={cfg.token_budget_default}')
-          "
+          docker run --rm --entrypoint sh context-life:test -lc 'context-life version && context-life info >/tmp/context-life-info.txt && context-life doctor >/tmp/context-life-doctor.txt && python -c "from mmcp.token_counter import count_tokens; from mmcp.config import get_config; print(\"✅ All imports OK\"); print(\"Token count test:\", count_tokens(\"hello world\")); cfg = get_config(); print(f\"Config loaded: budget={cfg.token_budget_default}\")"'
 
   # ──────────────────────────────────────────────────
   # Job 5: Install from GitHub URL (integration test)

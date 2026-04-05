@@ -81,43 +81,73 @@ def _check_workspace_artifacts(cwd: Optional[str] = None) -> Optional[Orchestrat
     """Check for orchestrator-related workspace artifacts."""
     workspace = Path(cwd) if cwd else Path.cwd()
 
+    home_dir = Path.home()
+    opencode_roots = (workspace,) if cwd else (workspace, home_dir)
+
+    def _build_detection_method(root: Path, artifact: str) -> str:
+        if root == workspace:
+            return f"workspace:{artifact}"
+        if root == home_dir:
+            return f"home:{artifact}"
+        return f"path:{artifact}"
+
     # Gentleman Guardian Angel / Gentle ecosystem marker
-    gga_file = workspace / ".gga"
-    if gga_file.is_file():
-        return OrchestratorInfo(
-            is_detected=True,
-            orchestrator_name="gentle-ai",
-            detection_method="workspace:.gga",
-            features=["gga", "review_rules", "ecosystem"],
-            advisor_mode=True,
-        )
-
-    # Gentle AI / Gemini CLI artifacts
-    gemini_dir = workspace / ".gemini"
-    if gemini_dir.is_dir():
-        features = ["gemini_config"]
-        # Check for specific Gentle AI markers
-        if (gemini_dir / "antigravity").is_dir():
-            features.extend(["antigravity", "skills", "sdd"])
-        return OrchestratorInfo(
-            is_detected=True,
-            orchestrator_name="gentle-ai",
-            detection_method="workspace:.gemini/",
-            features=features,
-            advisor_mode=True,
-        )
-
-    # Agent Teams artifacts
-    for agent_dir_name in (".agent", ".agents", "_agent", "_agents"):
-        agent_dir = workspace / agent_dir_name
-        if agent_dir.is_dir():
+    for root in (workspace,):
+        gga_file = root / ".gga"
+        if gga_file.is_file():
             return OrchestratorInfo(
                 is_detected=True,
-                orchestrator_name="agent-teams",
-                detection_method=f"workspace:{agent_dir_name}/",
-                features=["workflows", "skills"],
+                orchestrator_name="gentle-ai",
+                detection_method=_build_detection_method(root, ".gga"),
+                features=["gga", "review_rules", "ecosystem"],
                 advisor_mode=True,
             )
+
+    # Gentle AI / Gemini CLI artifacts
+    for root in (workspace,):
+        gemini_dir = root / ".gemini"
+        if gemini_dir.is_dir():
+            features = ["gemini_config"]
+            # Check for specific Gentle AI markers
+            if (gemini_dir / "antigravity").is_dir():
+                features.extend(["antigravity", "skills", "sdd"])
+            return OrchestratorInfo(
+                is_detected=True,
+                orchestrator_name="gentle-ai",
+                detection_method=_build_detection_method(root, ".gemini/"),
+                features=features,
+                advisor_mode=True,
+            )
+
+    # OpenCode artifacts — workspace-first, with optional user-config fallback
+    for root in opencode_roots:
+        opencode_candidates = (
+            (root / ".atl", ".atl/", ["atl", "skills", "workflows"]),
+            (root / ".opencode", ".opencode/", ["opencode", "workspace_config"]),
+            (root / ".config" / "opencode", ".config/opencode/", ["opencode", "config"]),
+        )
+        for artifact_path, artifact_name, features in opencode_candidates:
+            if artifact_path.is_dir():
+                return OrchestratorInfo(
+                    is_detected=True,
+                    orchestrator_name="opencode",
+                    detection_method=_build_detection_method(root, artifact_name),
+                    features=features,
+                    advisor_mode=True,
+                )
+
+    # Agent Teams artifacts
+    for root in (workspace,):
+        for agent_dir_name in (".agent", ".agents", "_agent", "_agents"):
+            agent_dir = root / agent_dir_name
+            if agent_dir.is_dir():
+                return OrchestratorInfo(
+                    is_detected=True,
+                    orchestrator_name="agent-teams",
+                    detection_method=_build_detection_method(root, f"{agent_dir_name}/"),
+                    features=["workflows", "skills"],
+                    advisor_mode=True,
+                )
 
     return None
 

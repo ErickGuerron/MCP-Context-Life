@@ -19,16 +19,16 @@ from __future__ import annotations
 import hashlib
 import os
 import re
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Optional
 
 import lancedb
+import pyarrow.compute as pc
 
-from mmcp.token_counter import count_tokens, DEFAULT_ENCODING
+from mmcp.token_counter import DEFAULT_ENCODING, count_tokens
 
 # --- Configuration ---
-DEFAULT_DB_PATH = os.path.expanduser("~/.mmcp/lancedb")
 DEFAULT_TABLE_NAME = "knowledge"
 DEFAULT_EMBEDDING_MODEL = "paraphrase-multilingual-MiniLM-L12-v2"
 DEFAULT_CHUNK_SIZE = 512
@@ -39,6 +39,7 @@ DEFAULT_MAX_CHUNKS_PER_SOURCE = 0  # P6: 0 = no limit
 
 
 # --- Chunking ---
+
 
 def _chunk_text(
     text: str,
@@ -112,7 +113,24 @@ def _compute_file_hash(filepath: str) -> str:
     return sha256.hexdigest()
 
 
+def _iter_directory_files(dirpath: str, recursive: bool):
+    """Yield files with deterministic ordering using a single filesystem walk."""
+    if recursive:
+        for root, dirs, files in os.walk(dirpath):
+            dirs.sort()
+            files.sort()
+            for filename in files:
+                yield os.path.join(root, filename)
+        return
+
+    with os.scandir(dirpath) as entries:
+        for entry in sorted(entries, key=lambda item: item.name):
+            if entry.is_file():
+                yield entry.path
+
+
 # --- RAG Engine ---
+
 
 @dataclass
 class SearchResult:
@@ -148,20 +166,21 @@ class RAGEngine:
 
     def __init__(
         self,
-        db_path: str = DEFAULT_DB_PATH,
+        db_path: Optional[str] = None,
         table_name: str = DEFAULT_TABLE_NAME,
         embedding_model: str = DEFAULT_EMBEDDING_MODEL,
         chunk_size: int = DEFAULT_CHUNK_SIZE,
         chunk_overlap: int = DEFAULT_CHUNK_OVERLAP,
     ):
-        self.db_path = db_path
+        resolved_db_path = db_path or os.path.expanduser("~/.mmcp/lancedb")
+        self.db_path = resolved_db_path
         self.table_name = table_name
         self.chunk_size = chunk_size
         self.chunk_overlap = chunk_overlap
         self._embedding_model_name = embedding_model
 
         # Ensure DB directory exists
-        Path(db_path).mkdir(parents=True, exist_ok=True)
+        Path(resolved_db_path).mkdir(parents=True, exist_ok=True)
 
         # RFC-002 P1: These are ALL deferred — no model loading here
         self._embedding_fn = None
@@ -169,7 +188,7 @@ class RAGEngine:
         self._model_loaded = False
 
         # Connect to LanceDB (lightweight — no model needed)
-        self._db = lancedb.connect(db_path)
+        self._db = lancedb.connect(resolved_db_path)
         self._table = None
 
         # P3: Track indexed file hashes in memory for fast dedup checks
@@ -192,9 +211,7 @@ class RAGEngine:
 
         # Load the embedding model (~12s on first call, cached by lancedb after)
         registry = get_registry()
-        self._embedding_fn = registry.get("sentence-transformers").create(
-            name=self._embedding_model_name
-        )
+        self._embedding_fn = registry.get("sentence-transformers").create(name=self._embedding_model_name)
 
         # Build the schema dynamically based on embedding dimensions
         ndims = self._embedding_fn.ndims()
@@ -251,11 +268,26 @@ class RAGEngine:
         """
         try:
             table = self._get_or_create_table()
-            df = table.to_pandas()
-            if "file_hash" in df.columns:
-                self._indexed_hashes = set(df["file_hash"].unique())
+
+            # Prefer a projected scan so we don't materialize full rows
+            # (especially vectors/text) just to rebuild the hash cache.
+            hash_table = table.search().select(["file_hash"]).to_arrow()
+            if "file_hash" in hash_table.column_names:
+                unique_hashes = pc.unique(hash_table["file_hash"]).drop_null()
+                self._indexed_hashes = set(unique_hashes.to_pylist())
+            else:
+                self._indexed_hashes = set()
         except Exception:
-            self._indexed_hashes = set()
+            try:
+                # Fallback for older LanceDB/query-builder behavior.
+                table = self._get_or_create_table()
+                df = table.to_pandas()
+                if "file_hash" in df.columns:
+                    self._indexed_hashes = set(df["file_hash"].dropna().unique())
+                else:
+                    self._indexed_hashes = set()
+            except Exception:
+                self._indexed_hashes = set()
         self._hashes_loaded = True
 
     def _is_hash_indexed(self, file_hash: str) -> bool:
@@ -322,7 +354,7 @@ class RAGEngine:
 
         # P3: If force re-index, remove old chunks first
         if force and self._is_hash_indexed(file_hash):
-            removed = self._remove_by_hash(file_hash)
+            self._remove_by_hash(file_hash)
 
         # Read file content
         with open(filepath, "r", encoding="utf-8", errors="replace") as f:
@@ -381,9 +413,21 @@ class RAGEngine:
         """
         if extensions is None:
             extensions = [
-                ".md", ".txt", ".py", ".js", ".ts", ".go",
-                ".rs", ".java", ".yaml", ".yml", ".toml",
-                ".json", ".html", ".css", ".sh",
+                ".md",
+                ".txt",
+                ".py",
+                ".js",
+                ".ts",
+                ".go",
+                ".rs",
+                ".java",
+                ".yaml",
+                ".yml",
+                ".toml",
+                ".json",
+                ".html",
+                ".css",
+                ".sh",
             ]
 
         dirpath = os.path.abspath(dirpath)
@@ -392,23 +436,27 @@ class RAGEngine:
 
         results = {"indexed": 0, "skipped": 0, "errors": 0, "files": []}
 
-        pattern = "**/*" if recursive else "*"
-        for ext in extensions:
-            for filepath in Path(dirpath).glob(f"{pattern}{ext}"):
-                try:
-                    result = self.index_file(str(filepath), force=force)
-                    if result["status"] == "indexed":
-                        results["indexed"] += 1
-                    else:
-                        results["skipped"] += 1
-                    results["files"].append(result)
-                except Exception as e:
-                    results["errors"] += 1
-                    results["files"].append({
+        allowed_extensions = {ext.lower() for ext in extensions}
+        for filepath in _iter_directory_files(dirpath, recursive):
+            if Path(filepath).suffix.lower() not in allowed_extensions:
+                continue
+
+            try:
+                result = self.index_file(filepath, force=force)
+                if result["status"] == "indexed":
+                    results["indexed"] += 1
+                else:
+                    results["skipped"] += 1
+                results["files"].append(result)
+            except Exception as e:
+                results["errors"] += 1
+                results["files"].append(
+                    {
                         "status": "error",
                         "source": str(filepath),
                         "error": str(e),
-                    })
+                    }
+                )
 
         return results
 
@@ -449,12 +497,7 @@ class RAGEngine:
         table = self._get_or_create_table()
 
         try:
-            rows = (
-                table.search(query)
-                .metric("cosine")
-                .limit(top_k)
-                .to_list()
-            )
+            rows = table.search(query).metric("cosine").limit(top_k).to_list()
         except Exception:
             return []
 

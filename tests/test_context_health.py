@@ -13,16 +13,13 @@ Verifies:
 
 import json
 
-import pytest
-
+from mmcp.token_counter import count_messages_tokens
 from mmcp.trim_history import (
-    analyze_context_health,
-    ContextHealthReport,
     _compute_redundancy_ratio,
     _compute_system_to_user_ratio,
     _estimate_noise,
+    analyze_context_health,
 )
-from mmcp.token_counter import count_messages_tokens
 
 
 class TestHealthScoreRanges:
@@ -123,6 +120,37 @@ class TestRedundancyDetection:
         ]
         ratio = _compute_redundancy_ratio(messages)
         assert ratio > 0.0
+
+    def test_structured_multimodal_content_counts_for_redundancy(self):
+        """Structured content should be normalized recursively for duplicate detection."""
+        messages = [
+            {
+                "role": "user",
+                "content": [
+                    {"type": "text", "text": "Hello   world"},
+                    {"type": "image_url", "image_url": {"url": "https://example.com/a.png"}},
+                ],
+            },
+            {
+                "role": "user",
+                "content": [
+                    {"type": "text", "text": " hello world "},
+                    {"type": "image_url", "image_url": {"url": "https://example.com/b.png"}},
+                ],
+            },
+        ]
+
+        ratio = _compute_redundancy_ratio(messages)
+        assert ratio > 0.0
+
+    def test_analyze_context_health_reports_structured_redundancy(self):
+        messages = [
+            {"role": "user", "content": {"text": "same nested payload", "meta": {"caption": "diagram"}}},
+            {"role": "assistant", "content": {"content": ["same nested payload", {"title": "diagram"}]}},
+        ]
+
+        report = analyze_context_health(messages, max_tokens=8000)
+        assert report.metrics["redundancy_ratio"] > 0.0
 
 
 class TestSystemToUserRatio:

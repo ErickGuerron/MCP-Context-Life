@@ -19,8 +19,10 @@ from typing import Optional
 from mcp.server.fastmcp import FastMCP
 
 from mmcp.cache_manager import CacheLoop
+from mmcp.config import get_config, get_rag_warmup_mode_details
 from mmcp.orchestrator_detector import get_orchestrator_info
 from mmcp.rag_engine import RAGEngine
+from mmcp.telemetry_service import track_telemetry
 from mmcp.token_counter import (
     DEFAULT_ENCODING,
     TokenBudget,
@@ -29,7 +31,6 @@ from mmcp.token_counter import (
     get_cache_info,
 )
 from mmcp.trim_history import analyze_context_health, trim_messages
-from mmcp.telemetry_service import track_telemetry
 
 # --- Server Instance ---
 mcp = FastMCP(
@@ -42,17 +43,141 @@ mcp = FastMCP(
 )
 
 # --- Shared State (per-session singletons) ---
-_token_budget = TokenBudget()
+_token_budget: Optional[TokenBudget] = None
 _rag_engine: Optional[RAGEngine] = None
-_cache_loop = CacheLoop()
+_cache_loop: Optional[CacheLoop] = None
+_runtime_initialized = False
+_token_budget_config_key: Optional[tuple[int, int]] = None
+_rag_engine_config_key: Optional[tuple[str, str, int, int]] = None
+_cache_loop_config_key: Optional[tuple[int, int, int, str]] = None
+_runtime_initialized_key: Optional[tuple[str, tuple[str, str, int, int]]] = None
+
+
+def _current_token_budget_config_key() -> tuple[int, int]:
+    cfg = get_config()
+    return (cfg.token_budget_default, cfg.token_budget_safety_buffer)
+
+
+def _current_rag_engine_config_key() -> tuple[str, str, int, int]:
+    cfg = get_config()
+    return (
+        cfg.resolve_rag_db_path(),
+        cfg.rag_table_name,
+        cfg.rag_chunk_size,
+        cfg.rag_chunk_overlap,
+    )
+
+
+def _current_cache_loop_config_key() -> tuple[int, int, int, str]:
+    cfg = get_config()
+    return (
+        cfg.cache_max_entries,
+        cfg.cache_rag_thrash_threshold,
+        cfg.cache_rag_bypass_cooldown,
+        str(cfg.resolve_cache_db_path()),
+    )
+
+
+def _get_token_budget() -> TokenBudget:
+    global _token_budget, _token_budget_config_key
+    current_key = _current_token_budget_config_key()
+    if _token_budget is None or _token_budget_config_key != current_key:
+        cfg = get_config()
+        _token_budget = TokenBudget(
+            max_tokens=cfg.token_budget_default,
+            safety_buffer=cfg.token_budget_safety_buffer / 10000.0,
+        )
+        _token_budget_config_key = current_key
+    return _token_budget
+
+
+def _get_cache_loop() -> CacheLoop:
+    global _cache_loop, _cache_loop_config_key
+    current_key = _current_cache_loop_config_key()
+    if _cache_loop is None or _cache_loop_config_key != current_key:
+        _cache_loop = CacheLoop()
+        _cache_loop_config_key = current_key
+    return _cache_loop
 
 
 def _get_rag_engine() -> RAGEngine:
     """Lazy initialization of the RAG engine."""
-    global _rag_engine
-    if _rag_engine is None:
-        _rag_engine = RAGEngine()
+    global _rag_engine, _rag_engine_config_key
+    current_key = _current_rag_engine_config_key()
+    if _rag_engine is None or _rag_engine_config_key != current_key:
+        cfg = get_config()
+        _rag_engine = RAGEngine(
+            db_path=cfg.resolve_rag_db_path(),
+            table_name=cfg.rag_table_name,
+            chunk_size=cfg.rag_chunk_size,
+            chunk_overlap=cfg.rag_chunk_overlap,
+        )
+        _rag_engine_config_key = current_key
     return _rag_engine
+
+
+def initialize_runtime(force: bool = False) -> dict:
+    """Apply configured startup behavior for RAG warmup."""
+    global _runtime_initialized, _runtime_initialized_key
+
+    cfg = get_config()
+    mode = cfg.rag_warmup_mode
+    details = get_rag_warmup_mode_details(mode)
+    runtime_key = (mode, _current_rag_engine_config_key())
+
+    if _runtime_initialized and _runtime_initialized_key == runtime_key and not force:
+        return {
+            "status": "already_initialized",
+            "mode": mode,
+            "prewarmed": _rag_engine is not None and _rag_engine._model_loaded,
+            "mcp_impact": details["current"]["mcp_impact"],
+        }
+
+    prewarmed = False
+    if mode == "startup":
+        engine = _get_rag_engine()
+        if not engine._model_loaded:
+            engine.prewarm()
+        prewarmed = engine._model_loaded
+
+    _runtime_initialized = True
+    _runtime_initialized_key = runtime_key
+    return {
+        "status": "initialized",
+        "mode": mode,
+        "prewarmed": prewarmed,
+        "mcp_impact": details["current"]["mcp_impact"],
+    }
+
+
+def prewarm_rag_now() -> dict:
+    """Explicitly prewarm the RAG model on demand."""
+    engine = _get_rag_engine()
+    already_loaded = engine._model_loaded
+    if not already_loaded:
+        engine.prewarm()
+
+    return {
+        "status": "ready",
+        "mode": get_config().rag_warmup_mode,
+        "already_loaded": already_loaded,
+        "model_loaded": engine._model_loaded,
+        "message": "RAG embedding model is warm and ready for the next MCP search/index call.",
+    }
+
+
+def reset_runtime_state() -> None:
+    """Reset module runtime singletons for tests."""
+    global _rag_engine, _runtime_initialized, _token_budget, _cache_loop
+    global _token_budget_config_key, _rag_engine_config_key, _cache_loop_config_key, _runtime_initialized_key
+    _rag_engine = None
+    _runtime_initialized = False
+    _token_budget = None
+    _cache_loop = None
+    _token_budget_config_key = None
+    _rag_engine_config_key = None
+    _cache_loop_config_key = None
+    _runtime_initialized_key = None
 
 
 # ============================================================
@@ -77,13 +202,13 @@ def count_tokens_tool(
         JSON with token count and encoding used
     """
     token_count = count_tokens(text, encoding)
-    _token_budget.consume(token_count)
+    _get_token_budget().consume(token_count)
 
     return json.dumps(
         {
             "token_count": token_count,
             "encoding": encoding,
-            "budget": _token_budget.to_dict(),
+            "budget": _get_token_budget().to_dict(),
         }
     )
 
@@ -120,7 +245,7 @@ def count_messages_tokens_tool(
             }
         )
 
-    _token_budget.consume(total)
+    _get_token_budget().consume(total)
 
     return json.dumps(
         {
@@ -128,7 +253,7 @@ def count_messages_tokens_tool(
             "message_count": len(msgs),
             "breakdown": breakdown,
             "encoding": encoding,
-            "budget": _token_budget.to_dict(),
+            "budget": _get_token_budget().to_dict(),
         }
     )
 
@@ -288,8 +413,19 @@ def cache_context(
         if results:
             rag_context = "\n\n---\n\n".join(f"[{r.source} | chunk {r.chunk_index}]\n{r.text}" for r in results)
 
-    result = _cache_loop.process_messages(msgs, rag_context=rag_context)
+    result = _get_cache_loop().process_messages(msgs, rag_context=rag_context)
     return json.dumps(result)
+
+
+@mcp.tool()
+def prewarm_rag() -> str:
+    """
+    Explicitly prewarm the local RAG embedding model.
+
+    Useful when warmup mode is `manual` or `lazy` and you want the next
+    MCP RAG request to avoid the first-use cold-start cost.
+    """
+    return json.dumps(prewarm_rag_now())
 
 
 @mcp.tool()
@@ -444,7 +580,7 @@ def get_orchestration_advice(
 @mcp.resource("status://token_budget")
 def token_budget_resource() -> str:
     """Current token budget status: consumed, remaining, usage percentage."""
-    result = _token_budget.to_dict()
+    result = _get_token_budget().to_dict()
     result["token_count_cache"] = get_cache_info()
     return json.dumps(result)
 
@@ -452,7 +588,7 @@ def token_budget_resource() -> str:
 @mcp.resource("cache://status")
 def cache_status_resource() -> str:
     """Cache performance: hit rate, total lookups, tokens saved estimate."""
-    return json.dumps(_cache_loop.get_stats())
+    return json.dumps(_get_cache_loop().get_stats())
 
 
 @mcp.resource("rag://stats")
@@ -460,6 +596,21 @@ def rag_stats_resource() -> str:
     """RAG knowledge base statistics: total chunks, database info."""
     engine = _get_rag_engine()
     return json.dumps(engine.stats())
+
+
+@mcp.resource("status://rag_warmup")
+def rag_warmup_resource() -> str:
+    """RAG warmup mode, impact, and current runtime state."""
+    details = get_rag_warmup_mode_details(get_config().rag_warmup_mode)
+    return json.dumps(
+        {
+            "current_mode": details["current_mode"],
+            "current": details["current"],
+            "modes": details["modes"],
+            "engine_initialized": _rag_engine is not None,
+            "model_loaded": _rag_engine._model_loaded if _rag_engine is not None else False,
+        }
+    )
 
 
 @mcp.resource("status://orchestrator")

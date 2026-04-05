@@ -123,6 +123,35 @@ class TestWorkspaceDetection:
         assert result.orchestrator_name == "gentle-ai"
         assert result.detection_method == "workspace:.gga"
 
+    def test_opencode_atl_dir_detected(self):
+        """Presence of .atl/ should detect OpenCode."""
+        with tempfile.TemporaryDirectory() as tmp:
+            (Path(tmp) / ".atl").mkdir()
+            result = _check_workspace_artifacts(cwd=tmp)
+
+        assert result is not None
+        assert result.orchestrator_name == "opencode"
+        assert result.detection_method == "workspace:.atl/"
+        assert "atl" in result.features
+
+    def test_opencode_home_config_detected_without_explicit_cwd(self):
+        """Home .config/opencode/ should be a safe fallback for runtime autodetect."""
+        with tempfile.TemporaryDirectory() as tmp:
+            fake_home = Path(tmp) / "home"
+            fake_workspace = Path(tmp) / "workspace"
+            (fake_home / ".config" / "opencode").mkdir(parents=True)
+            fake_workspace.mkdir()
+
+            with (
+                patch("mmcp.orchestrator_detector.Path.home", return_value=fake_home),
+                patch("mmcp.orchestrator_detector.Path.cwd", return_value=fake_workspace),
+            ):
+                result = _check_workspace_artifacts()
+
+        assert result is not None
+        assert result.orchestrator_name == "opencode"
+        assert result.detection_method == "home:.config/opencode/"
+
     def test_no_workspace_artifacts(self):
         """Empty workspace should return None."""
         with tempfile.TemporaryDirectory() as tmp:

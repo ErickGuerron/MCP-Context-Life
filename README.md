@@ -10,7 +10,7 @@
 </p>
 
 <p align="center">
-  <a href="https://github.com/ErickGuerron/MCP-Context-Life/releases"><img src="https://img.shields.io/badge/version-0.6.0-blue?style=flat-square" alt="Version" /></a>
+  <a href="https://github.com/ErickGuerron/MCP-Context-Life/releases"><img src="https://img.shields.io/badge/version-0.7.1-blue?style=flat-square" alt="Version" /></a>
   <a href="https://www.python.org/downloads/"><img src="https://img.shields.io/badge/python-%3E%3D3.10-brightgreen?style=flat-square" alt="Python" /></a>
   <a href="LICENSE.md"><img src="https://img.shields.io/badge/license-MIT-green?style=flat-square" alt="License" /></a>
   <a href="https://modelcontextprotocol.io"><img src="https://img.shields.io/badge/protocol-MCP-purple?style=flat-square" alt="MCP" /></a>
@@ -75,7 +75,7 @@ pip install "context-life[core]"
 pip install "context-life[rag]"
 
 # Pinned to a specific version
-uv tool install "git+https://github.com/ErickGuerron/MCP-Context-Life.git@v0.6.0"
+uv tool install "git+https://github.com/ErickGuerron/MCP-Context-Life.git@v0.7.1"
 ```
 
 ### From Source
@@ -108,8 +108,12 @@ context-life serve                     # Start MCP server (stdio)
 context-life serve --http              # Start MCP server (HTTP)
 context-life info                      # System info, config, dependencies
 context-life doctor                    # Environment diagnostics
+context-life warmup                    # Explain RAG warmup mode + current setting
+context-life warmup set startup        # Persist warmup mode: lazy|startup|manual
+context-life warmup interactive        # Interactive selector for warmup mode + prewarm
+context-life prewarm                   # Explicitly warm the RAG model now
 context-life upgrade                   # Upgrade to latest GitHub release
-context-life upgrade --version v0.6.0  # Install specific version
+context-life upgrade --version v0.7.1  # Install specific version
 context-life upgrade --dry-run         # Check without installing
 context-life version                   # Show version
 context-life help                      # Show help
@@ -296,6 +300,7 @@ top_k = 5
 min_score = 0.3
 max_chunks_per_source = 3
 chunk_size = 512
+warmup_mode = "lazy"
 
 [token_budget]
 default = 128000
@@ -312,9 +317,18 @@ data_dir = "~/.local/share/context-life"
 
 ```bash
 export CL_RAG_TOP_K=10
+export CL_RAG_WARMUP_MODE=startup
 export CL_TOKEN_BUDGET_DEFAULT=64000
 export CL_DATA_DIR=/custom/path
 ```
+
+### RAG warmup modes
+
+- `lazy` *(default)* — fast MCP startup, but the first RAG search/index pays the model load cost.
+- `startup` — slower MCP startup because the model is prewarmed during boot, but first RAG use is faster.
+- `manual` — never prewarms automatically; use `context-life prewarm` or the `prewarm_rag` MCP tool when you want to warm it explicitly.
+
+If you prefer not to memorize commands, run `context-life warmup interactive` or open `context-life tui` and choose **RAG Warmup Selector**. From there you can inspect MCP impact, switch between `lazy` / `startup` / `manual`, and optionally trigger a manual prewarm immediately.
 
 ---
 
@@ -332,6 +346,12 @@ ruff check mmcp/
 
 # Test
 pytest
+
+# Skip slow RAG integration tests
+pytest -m "not slow"
+
+# Run performance-oriented smoke/stress tests
+pytest -m performance
 ```
 
 ---

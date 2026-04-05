@@ -13,13 +13,12 @@ Verifies that:
 import pytest
 
 from mmcp.token_counter import (
+    _MIN_CACHE_LENGTH,
+    _encoder_cache,
+    clear_cache,
     count_tokens,
     get_cache_info,
-    clear_cache,
     get_encoder,
-    _encoder_cache,
-    _cached_count,
-    _MIN_CACHE_LENGTH,
 )
 
 
@@ -39,22 +38,22 @@ class TestTokenCachingAccuracy:
     def test_same_result_cached_vs_fresh(self):
         """Cached and fresh counts must be identical."""
         text = "This is a test sentence for token counting accuracy."
-        
+
         # First call — cache miss
         count1 = count_tokens(text)
         # Second call — cache hit
         count2 = count_tokens(text)
-        
+
         assert count1 == count2
         assert count1 > 0
 
     def test_different_encodings_different_counts(self):
         """Different encodings should produce different counts."""
         text = "Token counting with different encodings for verification."
-        
+
         count_cl = count_tokens(text, "cl100k_base")
         count_o200k = count_tokens(text, "o200k_base")
-        
+
         # Both should be positive
         assert count_cl > 0
         assert count_o200k > 0
@@ -76,12 +75,12 @@ class TestLRUCacheHits:
         """First call is miss, second call is hit."""
         text = "A sufficiently long text for cache testing requirements."
         assert len(text) >= _MIN_CACHE_LENGTH
-        
+
         count_tokens(text)
         info1 = get_cache_info()
         assert info1["misses"] == 1
         assert info1["hits"] == 0
-        
+
         count_tokens(text)
         info2 = get_cache_info()
         assert info2["hits"] == 1
@@ -91,10 +90,10 @@ class TestLRUCacheHits:
         """Strings shorter than _MIN_CACHE_LENGTH skip the cache entirely."""
         short = "Hi!"
         assert len(short) < _MIN_CACHE_LENGTH
-        
+
         count_tokens(short)
         count_tokens(short)
-        
+
         info = get_cache_info()
         # No cache interactions for short strings
         assert info["hits"] == 0
@@ -105,18 +104,18 @@ class TestLRUCacheHits:
         # Fill cache with unique strings
         for i in range(50):
             count_tokens(f"Unique test string number {i} for cache size testing purposes")
-        
+
         info = get_cache_info()
         assert info["currsize"] <= info["maxsize"]
 
     def test_hit_rate_calculation(self):
         """Hit rate should be computed correctly."""
         text = "Repeated text for hit rate calculation testing."
-        
+
         # 1 miss + 4 hits = 80% hit rate
         for _ in range(5):
             count_tokens(text)
-        
+
         info = get_cache_info()
         assert info["hit_rate"] == 80.0
 
@@ -128,10 +127,10 @@ class TestEncoderCache:
         """Encoder should be cached after first retrieval."""
         _encoder_cache.clear()
         assert "cl100k_base" not in _encoder_cache
-        
+
         enc = get_encoder("cl100k_base")
         assert "cl100k_base" in _encoder_cache
-        
+
         # Second call returns the SAME object
         enc2 = get_encoder("cl100k_base")
         assert enc is enc2
@@ -145,12 +144,12 @@ class TestEncoderCache:
         """clear_cache() should reset the LRU cache stats."""
         text = "Text for clear cache testing with enough characters."
         count_tokens(text)
-        
+
         info = get_cache_info()
         assert info["currsize"] > 0
-        
+
         clear_cache()
-        
+
         info = get_cache_info()
         assert info["currsize"] == 0
         assert info["hits"] == 0

@@ -23,14 +23,13 @@ from __future__ import annotations
 
 import hashlib
 import json
-import re
 import time
 from dataclasses import dataclass, field
 from typing import Optional
 
 from mmcp.config import get_config
 from mmcp.session_store import SessionStore
-from mmcp.token_counter import count_tokens, DEFAULT_ENCODING
+from mmcp.token_counter import DEFAULT_ENCODING, count_tokens
 
 
 def _canonicalize_content(content: str) -> str:
@@ -156,7 +155,7 @@ class CacheStore:
             entry.record_hit()
             self._entries[content_hash] = entry
             self._session_store.record_prefix_hit(content_hash)
-            
+
             self.stats.cache_hits += 1
             return True, content_hash
 
@@ -180,11 +179,11 @@ class CacheStore:
             content_hash=content_hash,
             token_count=token_count,
         )
-        
+
         # L2 write-through
         self._session_store.store_prefix(content_hash, token_count)
         self._session_store.evict_old_prefixes(self._max_entries)
-        
+
         return content_hash
 
     def get_token_count(self, content_hash: str) -> int:
@@ -225,10 +224,45 @@ class CacheLoop:
     """
 
     def __init__(self, encoding: str = DEFAULT_ENCODING):
+        config = get_config()
         self._store = CacheStore()
         self._last_static_hash: Optional[str] = None
         self._last_base_hash: Optional[str] = None
+        self._last_rag_hash: Optional[str] = None
+        self._rag_change_streak: int = 0
+        self._rag_bypass_remaining: int = 0
+        self._rag_thrash_threshold = max(1, config.cache_rag_thrash_threshold)
+        self._rag_bypass_cooldown = max(1, config.cache_rag_bypass_cooldown)
         self._encoding = encoding
+
+    def _update_rag_stability(self, rag_hash: Optional[str]) -> dict:
+        """Track repeated RAG churn and expose a controlled bypass hint."""
+        bypass_active = False
+        trigger = False
+
+        if rag_hash is None:
+            self._rag_change_streak = 0
+            self._rag_bypass_remaining = 0
+        else:
+            if self._last_rag_hash and rag_hash != self._last_rag_hash:
+                self._rag_change_streak += 1
+            else:
+                self._rag_change_streak = 0
+
+            if self._rag_change_streak >= self._rag_thrash_threshold:
+                self._rag_bypass_remaining = self._rag_bypass_cooldown
+                trigger = True
+
+            if self._rag_bypass_remaining > 0:
+                bypass_active = True
+                self._rag_bypass_remaining -= 1
+
+        self._last_rag_hash = rag_hash
+        return {
+            "bypass_active": bypass_active,
+            "triggered": trigger,
+            "change_streak": self._rag_change_streak,
+        }
 
     def process_messages(
         self,
@@ -282,15 +316,21 @@ class CacheLoop:
             rag_token_count = count_tokens(rag_content, self._encoding)
             _, rag_hash = self._store.lookup(rag_content)
 
+        rag_control = self._update_rag_stability(rag_hash)
+
         # Phase 4: P1 — Count full static prefix tokens with REAL tiktoken
         full_static_content = json.dumps(static_messages, sort_keys=True)
         static_token_count = count_tokens(full_static_content, self._encoding)
 
         # Phase 5: P5 — Full prefix hash for overall cache hit detection
-        is_cached, content_hash = self._store.lookup(full_static_content)
+        if rag_control["bypass_active"] and rag_hash is not None:
+            is_cached = False
+            content_hash = _hash_content(full_static_content)
+        else:
+            is_cached, content_hash = self._store.lookup(full_static_content)
 
-        if not is_cached:
-            self._store.store(full_static_content, static_token_count)
+            if not is_cached:
+                self._store.store(full_static_content, static_token_count)
 
         # Phase 6: Detect cache hits (segmented)
         full_cache_hit = content_hash == self._last_static_hash
@@ -309,9 +349,7 @@ class CacheLoop:
         # Phase 7: P2 — Return CLEAN messages, NO internal metadata injected
         optimized_messages = static_messages + dynamic_messages
 
-        total_token_count = count_tokens(
-            json.dumps(optimized_messages, sort_keys=True), self._encoding
-        )
+        total_token_count = count_tokens(json.dumps(optimized_messages, sort_keys=True), self._encoding)
 
         result = {
             "messages": optimized_messages,
@@ -321,13 +359,19 @@ class CacheLoop:
                 "rag_prefix_hash": rag_hash,
                 "is_cache_hit": full_cache_hit,
                 "is_base_cache_hit": base_cache_hit,
-                "cache_eligible": True,
+                "cache_eligible": not (rag_control["bypass_active"] and rag_hash is not None),
                 "static_messages_count": len(static_messages),
                 "dynamic_messages_count": len(dynamic_messages),
                 "base_prefix_tokens": base_token_count,
                 "rag_prefix_tokens": rag_token_count,
                 "static_prefix_tokens": static_token_count,
                 "total_tokens": total_token_count,
+                "rag_cache_bypass_active": rag_control["bypass_active"],
+                "rag_change_streak": rag_control["change_streak"],
+                "rag_thrash_threshold": self._rag_thrash_threshold,
+                "rag_cache_mode": (
+                    "base-only" if rag_control["bypass_active"] and rag_hash is not None else "full-prefix"
+                ),
             },
             "stats": self._store.get_stats(),
         }
@@ -339,16 +383,12 @@ class CacheLoop:
         if orchestrator.advisor_mode:
             # Compute advisor hints based on token usage patterns
             dynamic_token_count = total_token_count - static_token_count
-            dynamic_ratio = (
-                round(dynamic_token_count / max(1, total_token_count), 2)
-            )
+            dynamic_ratio = round(dynamic_token_count / max(1, total_token_count), 2)
 
             result["advisor_hints"] = {
                 "orchestrator": orchestrator.orchestrator_name,
                 "should_trim_now": dynamic_ratio > 0.7,
-                "suggested_strategy": (
-                    "smart" if dynamic_ratio > 0.7 else "tail"
-                ),
+                "suggested_strategy": ("smart" if dynamic_ratio > 0.7 else "tail"),
                 "prefix_stable": full_cache_hit,
                 "dynamic_token_ratio": dynamic_ratio,
                 "recommendation": (
