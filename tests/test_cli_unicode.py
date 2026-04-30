@@ -1,4 +1,4 @@
-from mmcp import cli
+import mmcp.presentation.cli.cli as cli
 
 
 class _FakeStream:

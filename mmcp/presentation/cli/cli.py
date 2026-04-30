@@ -1,12 +1,12 @@
-"""
-Context-Life (CL) — CLI Module
+﻿"""
+Context-Life (CL) ΓÇö CLI Module
 
 Beautiful terminal interface using Rich for:
   - Startup banner and server info
-  - `context-life upgrade` — self-update from GitHub releases (not HEAD)
-  - `context-life info` — show system specs
-  - `context-life doctor` — environment validation
-  - `context-life version` — show version
+  - `context-life upgrade` ΓÇö self-update from GitHub releases (not HEAD)
+  - `context-life info` ΓÇö show system specs
+  - `context-life doctor` ΓÇö environment validation
+  - `context-life version` ΓÇö show version
 """
 
 from __future__ import annotations
@@ -54,18 +54,18 @@ GITHUB_REPO = "ErickGuerron/MCP-Context-Life"
 REPO_URL = f"https://github.com/{GITHUB_REPO}.git"
 
 BANNER = r"""
-   ██████╗ ██████╗ ███╗   ██╗████████╗███████╗██╗  ██╗████████╗
-  ██╔════╝██╔═══██╗████╗  ██║╚══██╔══╝██╔════╝╚██╗██╔╝╚══██╔══╝
-  ██║     ██║   ██║██╔██╗ ██║   ██║   █████╗   ╚███╔╝    ██║
-  ██║     ██║   ██║██║╚██╗██║   ██║   ██╔══╝   ██╔██╗    ██║
-  ╚██████╗╚██████╔╝██║ ╚████║   ██║   ███████╗██╔╝ ██╗   ██║
-   ╚═════╝ ╚═════╝ ╚═╝  ╚═══╝   ╚═╝   ╚══════╝╚═╝  ╚═╝   ╚═╝
-                  ██╗     ██╗███████╗███████╗
-                  ██║     ██║██╔════╝██╔════╝
-                  ██║     ██║█████╗  █████╗
-                  ██║     ██║██╔══╝  ██╔══╝
-                  ███████╗██║██║     ███████╗
-                  ╚══════╝╚═╝╚═╝     ╚══════╝
+   ΓûêΓûêΓûêΓûêΓûêΓûêΓòù ΓûêΓûêΓûêΓûêΓûêΓûêΓòù ΓûêΓûêΓûêΓòù   ΓûêΓûêΓòùΓûêΓûêΓûêΓûêΓûêΓûêΓûêΓûêΓòùΓûêΓûêΓûêΓûêΓûêΓûêΓûêΓòùΓûêΓûêΓòù  ΓûêΓûêΓòùΓûêΓûêΓûêΓûêΓûêΓûêΓûêΓûêΓòù
+  ΓûêΓûêΓòöΓòÉΓòÉΓòÉΓòÉΓò¥ΓûêΓûêΓòöΓòÉΓòÉΓòÉΓûêΓûêΓòùΓûêΓûêΓûêΓûêΓòù  ΓûêΓûêΓòæΓòÜΓòÉΓòÉΓûêΓûêΓòöΓòÉΓòÉΓò¥ΓûêΓûêΓòöΓòÉΓòÉΓòÉΓòÉΓò¥ΓòÜΓûêΓûêΓòùΓûêΓûêΓòöΓò¥ΓòÜΓòÉΓòÉΓûêΓûêΓòöΓòÉΓòÉΓò¥
+  ΓûêΓûêΓòæ     ΓûêΓûêΓòæ   ΓûêΓûêΓòæΓûêΓûêΓòöΓûêΓûêΓòù ΓûêΓûêΓòæ   ΓûêΓûêΓòæ   ΓûêΓûêΓûêΓûêΓûêΓòù   ΓòÜΓûêΓûêΓûêΓòöΓò¥    ΓûêΓûêΓòæ
+  ΓûêΓûêΓòæ     ΓûêΓûêΓòæ   ΓûêΓûêΓòæΓûêΓûêΓòæΓòÜΓûêΓûêΓòùΓûêΓûêΓòæ   ΓûêΓûêΓòæ   ΓûêΓûêΓòöΓòÉΓòÉΓò¥   ΓûêΓûêΓòöΓûêΓûêΓòù    ΓûêΓûêΓòæ
+  ΓòÜΓûêΓûêΓûêΓûêΓûêΓûêΓòùΓòÜΓûêΓûêΓûêΓûêΓûêΓûêΓòöΓò¥ΓûêΓûêΓòæ ΓòÜΓûêΓûêΓûêΓûêΓòæ   ΓûêΓûêΓòæ   ΓûêΓûêΓûêΓûêΓûêΓûêΓûêΓòùΓûêΓûêΓòöΓò¥ ΓûêΓûêΓòù   ΓûêΓûêΓòæ
+   ΓòÜΓòÉΓòÉΓòÉΓòÉΓòÉΓò¥ ΓòÜΓòÉΓòÉΓòÉΓòÉΓòÉΓò¥ ΓòÜΓòÉΓò¥  ΓòÜΓòÉΓòÉΓòÉΓò¥   ΓòÜΓòÉΓò¥   ΓòÜΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓò¥ΓòÜΓòÉΓò¥  ΓòÜΓòÉΓò¥   ΓòÜΓòÉΓò¥
+                  ΓûêΓûêΓòù     ΓûêΓûêΓòùΓûêΓûêΓûêΓûêΓûêΓûêΓûêΓòùΓûêΓûêΓûêΓûêΓûêΓûêΓûêΓòù
+                  ΓûêΓûêΓòæ     ΓûêΓûêΓòæΓûêΓûêΓòöΓòÉΓòÉΓòÉΓòÉΓò¥ΓûêΓûêΓòöΓòÉΓòÉΓòÉΓòÉΓò¥
+                  ΓûêΓûêΓòæ     ΓûêΓûêΓòæΓûêΓûêΓûêΓûêΓûêΓòù  ΓûêΓûêΓûêΓûêΓûêΓòù
+                  ΓûêΓûêΓòæ     ΓûêΓûêΓòæΓûêΓûêΓòöΓòÉΓòÉΓò¥  ΓûêΓûêΓòöΓòÉΓòÉΓò¥
+                  ΓûêΓûêΓûêΓûêΓûêΓûêΓûêΓòùΓûêΓûêΓòæΓûêΓûêΓòæ     ΓûêΓûêΓûêΓûêΓûêΓûêΓûêΓòù
+                  ΓòÜΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓò¥ΓòÜΓòÉΓò¥ΓòÜΓòÉΓò¥     ΓòÜΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓò¥
 """
 
 
@@ -87,7 +87,7 @@ class MenuScreen:
     title: str
     subtitle: str
     items: list[MenuItem]
-    help_text: str = "j/k: navigate • enter: select • esc: back • q: quit"
+    help_text: str = "j/k: navigate ΓÇó enter: select ΓÇó esc: back ΓÇó q: quit"
     selected: int = 0
     empty_message: str = "No items available."
     content_builder: Callable[[], object] | None = None
@@ -124,7 +124,7 @@ def _title_case_mode(mode: str) -> str:
 
 def _current_warmup_mode_label() -> str:
     """Read the current persisted warmup mode for inline config labels."""
-    from mmcp.config import get_config
+    from mmcp.infrastructure.environment.config import get_config
 
     return _title_case_mode(get_config().rag_warmup_mode)
 
@@ -151,9 +151,9 @@ def _build_internal_divider(title: str, width: int) -> Text:
 
     left = (usable_width - len(label)) // 2
     right = usable_width - len(label) - left
-    divider = Text("─" * left, style="dim")
+    divider = Text("ΓöÇ" * left, style="dim")
     divider.append(label, style="bold cyan")
-    divider.append("─" * right, style="dim")
+    divider.append("ΓöÇ" * right, style="dim")
     return divider
 
 
@@ -229,7 +229,7 @@ def _safe_import_check(module: str) -> tuple[bool, str]:
         ver = _meta_version(dist_name)
         return True, ver
     except PackageNotFoundError:
-        return False, "✗ not found"
+        return False, "Γ£ù not found"
 
 
 def _fetch_latest_release() -> tuple[str | None, str | None]:
@@ -263,14 +263,14 @@ def print_banner():
     CONSOLE.print(Align.center(banner_text))
     CONSOLE.print(
         f"  [bold white]Context-Life[/] [dim](CL)[/dim] [bold green]v{ver}[/]  "
-        f"[dim]— LLM Context Optimization MCP Server[/dim]\n",
+        f"[dim]ΓÇö LLM Context Optimization MCP Server[/dim]\n",
         justify="center",
     )
 
 
 def _build_rag_warmup_table():
     """Build a compact warmup comparison panel."""
-    from mmcp.config import get_config, get_rag_warmup_mode_details
+    from mmcp.infrastructure.environment.config import get_config, get_rag_warmup_mode_details
 
     details = get_rag_warmup_mode_details(get_config().rag_warmup_mode)
     lines: list[str] = []
@@ -281,17 +281,17 @@ def _build_rag_warmup_table():
             label = f"{label} [dim](current)[/]"
         lines.append(
             f"[bold]{label}[/]\n"
-            f"  startup → {info['startup_impact']}\n"
-            f"  first use → {info['first_use_impact']}\n"
-            f"  resources → {info['resource_impact']}"
+            f"  startup ΓåÆ {info['startup_impact']}\n"
+            f"  first use ΓåÆ {info['first_use_impact']}\n"
+            f"  resources ΓåÆ {info['resource_impact']}"
         )
 
-    return Panel("\n\n".join(lines), title="🔥 Warmup Modes", border_style="red", box=box.ROUNDED, padding=(0, 1))
+    return Panel("\n\n".join(lines), title="≡ƒöÑ Warmup Modes", border_style="red", box=box.ROUNDED, padding=(0, 1))
 
 
 def _build_rag_warmup_summary_panel():
     """Current warmup mode summary panel."""
-    from mmcp.config import get_config, get_rag_warmup_mode_details
+    from mmcp.infrastructure.environment.config import get_config, get_rag_warmup_mode_details
 
     details = get_rag_warmup_mode_details(get_config().rag_warmup_mode)
     current = details["current"]
@@ -301,7 +301,7 @@ def _build_rag_warmup_summary_panel():
         f"[bold]First RAG use:[/] {current['first_use_impact']}\n"
         f"[bold]Resources:[/] {current['resource_impact']}\n\n"
         "[dim]Persist it with `context-life warmup set <lazy|startup|manual>` or trigger `context-life prewarm`.[/]",
-        title="⚙️ RAG Warmup Status",
+        title="ΓÜÖ∩╕Å RAG Warmup Status",
         border_style="red",
         box=box.ROUNDED,
     )
@@ -309,7 +309,7 @@ def _build_rag_warmup_summary_panel():
 
 def _warmup_status_lines() -> list[str]:
     """Linear warmup summary lines for single-container detail pages."""
-    from mmcp.config import get_config, get_rag_warmup_mode_details
+    from mmcp.infrastructure.environment.config import get_config, get_rag_warmup_mode_details
 
     details = get_rag_warmup_mode_details(get_config().rag_warmup_mode)
     current = details["current"]
@@ -324,7 +324,7 @@ def _warmup_status_lines() -> list[str]:
 
 def _warmup_modes_lines() -> list[str]:
     """Linear warmup comparison lines for single-container detail pages."""
-    from mmcp.config import get_config, get_rag_warmup_mode_details
+    from mmcp.infrastructure.environment.config import get_config, get_rag_warmup_mode_details
 
     details = get_rag_warmup_mode_details(get_config().rag_warmup_mode)
     lines: list[str] = []
@@ -336,9 +336,9 @@ def _warmup_modes_lines() -> list[str]:
         lines.extend(
             [
                 f"[bold]{label}[/]",
-                f"startup → {info['startup_impact']}",
-                f"first use → {info['first_use_impact']}",
-                f"resources → {info['resource_impact']}",
+                f"startup ΓåÆ {info['startup_impact']}",
+                f"first use ΓåÆ {info['first_use_impact']}",
+                f"resources ΓåÆ {info['resource_impact']}",
                 "",
             ]
         )
@@ -478,11 +478,11 @@ def _detail_body_width() -> int:
 
 def _detail_footer_text(screen: MenuScreen, page_count: int) -> str:
     """Shared detail footer text."""
-    detail_help = ["scroll: j/k ↑/↓"]
+    detail_help = ["scroll: j/k Γåæ/Γåô"]
     if page_count > 1:
-        detail_help.append("page: ←/→")
+        detail_help.append("page: ΓåÉ/ΓåÆ")
     detail_help.extend(["esc: back", "q: quit"])
-    return " • ".join(detail_help)
+    return " ΓÇó ".join(detail_help)
 
 
 def _render_detail_page_lines(screen: MenuScreen, page_index: int, content_width: int) -> list[str]:
@@ -523,7 +523,7 @@ def _resolve_detail_layout(screen: MenuScreen, path: str, latest_version: str | 
     chrome = Group(
         Align.center(Text(BANNER, style="bold cyan")),
         Align.center(
-            Text(f"Context-Life (CL) v{get_version()}  —  LLM Context Optimization MCP Server", style="bold white")
+            Text(f"Context-Life (CL) v{get_version()}  ΓÇö  LLM Context Optimization MCP Server", style="bold white")
         ),
         Text(""),
         Align.center(_build_tui_header(path, screen.subtitle, latest_version)),
@@ -557,10 +557,10 @@ def _resolve_detail_layout(screen: MenuScreen, path: str, latest_version: str | 
 
     subtitle = f"Page {screen.page_index + 1}/{len(pages)}"
     if page.title and page.title != screen.title:
-        subtitle = f"{subtitle} • {page.title}"
+        subtitle = f"{subtitle} ΓÇó {page.title}"
     if max_offset > 0:
         subtitle = (
-            f"{subtitle} • scroll {screen.scroll_offset + 1}-"
+            f"{subtitle} ΓÇó scroll {screen.scroll_offset + 1}-"
             f"{min(len(page_lines), screen.scroll_offset + viewport_height)}/{len(page_lines)}"
         )
 
@@ -616,7 +616,7 @@ def _build_tui_header(path: str, subtitle: str, latest_version: str | None = Non
         Text(""),
         Panel(
             f"[bold yellow]New version available:[/] v{latest_version}\n"
-            "[dim]Open Config → Upgrade Context-Life to install it.[/]",
+            "[dim]Open Config ΓåÆ Upgrade Context-Life to install it.[/]",
             title="Update",
             border_style="yellow",
             box=box.ROUNDED,
@@ -686,11 +686,11 @@ def _build_menu_panel(screen: MenuScreen, path: str, latest_version: str | None 
     elif screen.items:
         for index, item in enumerate(screen.items):
             is_active = index == screen.selected
-            pointer = "▶" if is_active else " "
+            pointer = "Γû╢" if is_active else " "
             style = "bold black on cyan" if is_active else "white"
             label = f"{pointer} {_menu_item_display_label(item)}"
             if item.submenu is not None:
-                label = f"{label}  ›"
+                label = f"{label}  ΓÇ║"
             rows.append(Text(label, style=style))
             if item.description:
                 desc_style = "cyan" if is_active else "dim"
@@ -730,7 +730,7 @@ def _build_menu_panel(screen: MenuScreen, path: str, latest_version: str | None 
 
     ver = get_version()
     banner_text = Text(BANNER, style="bold cyan")
-    title_text = Text(f"Context-Life (CL) v{ver}  —  LLM Context Optimization MCP Server", style="bold white")
+    title_text = Text(f"Context-Life (CL) v{ver}  ΓÇö  LLM Context Optimization MCP Server", style="bold white")
 
     return Group(
         Align.center(banner_text),
@@ -794,7 +794,7 @@ def _show_stateful_menu(root_screen: MenuScreen):
 
     def paint():
         current = stack[-1]
-        path = "  ›  ".join(menu.title for menu in stack)
+        path = "  ΓÇ║  ".join(menu.title for menu in stack)
         renderable = _build_menu_panel(current, path, state["latest_version"])
         term_width = CONSOLE.width or 120
         term_height = CONSOLE.height or 40
@@ -818,7 +818,7 @@ def _show_stateful_menu(root_screen: MenuScreen):
 
             if key in ("j", "down"):
                 if current.content_builder is not None or current.content_pages_builder is not None:
-                    path = "  ›  ".join(menu.title for menu in stack)
+                    path = "  ΓÇ║  ".join(menu.title for menu in stack)
                     detail_layout = _resolve_detail_layout(current, path, state["latest_version"])
                     _move_detail_scroll(current, 1, detail_layout["max_offset"])
                 else:
@@ -827,7 +827,7 @@ def _show_stateful_menu(root_screen: MenuScreen):
                 continue
             if key in ("k", "up"):
                 if current.content_builder is not None or current.content_pages_builder is not None:
-                    path = "  ›  ".join(menu.title for menu in stack)
+                    path = "  ΓÇ║  ".join(menu.title for menu in stack)
                     detail_layout = _resolve_detail_layout(current, path, state["latest_version"])
                     _move_detail_scroll(current, -1, detail_layout["max_offset"])
                 else:
@@ -904,7 +904,7 @@ def _build_detail_screen(title: str, subtitle: str, content_builder: Callable[[]
         title=title,
         subtitle=subtitle,
         items=[],
-        help_text="esc: back • q: quit",
+        help_text="esc: back ΓÇó q: quit",
         content_builder=content_builder,
     )
 
@@ -917,14 +917,19 @@ def _build_paged_detail_screen(
         title=title,
         subtitle=subtitle,
         items=[],
-        help_text="j/k: scroll • left/right: page • esc: back • q: quit",
+        help_text="j/k: scroll ΓÇó left/right: page ΓÇó esc: back ΓÇó q: quit",
         content_pages_builder=content_pages_builder,
     )
 
 
 def set_rag_warmup_mode(mode: str) -> str:
     """Persist a new RAG warmup mode."""
-    from mmcp.config import VALID_RAG_WARMUP_MODES, get_config, normalize_rag_warmup_mode, save_config
+    from mmcp.infrastructure.environment.config import (
+        VALID_RAG_WARMUP_MODES,
+        get_config,
+        normalize_rag_warmup_mode,
+        save_config,
+    )
 
     normalized = normalize_rag_warmup_mode(mode)
     if normalized != mode.strip().lower() or normalized not in VALID_RAG_WARMUP_MODES:
@@ -938,7 +943,7 @@ def set_rag_warmup_mode(mode: str) -> str:
 
 def _show_saved_warmup_mode(mode: str):
     """Persist a warmup mode and return the inline status message."""
-    from mmcp.config import get_config
+    from mmcp.infrastructure.environment.config import get_config
 
     current_mode = get_config().rag_warmup_mode
     path = set_rag_warmup_mode(mode)
@@ -946,7 +951,7 @@ def _show_saved_warmup_mode(mode: str):
     if current_mode == mode:
         return f"[bold]Warmup mode:[/] [green]{mode}[/]\n[dim]Already active. Config remains at {path}[/]"
     else:
-        return f"[bold]Warmup mode updated:[/] [yellow]{current_mode}[/] → [green]{mode}[/]\n[dim]Saved in {path}[/]"
+        return f"[bold]Warmup mode updated:[/] [yellow]{current_mode}[/] ΓåÆ [green]{mode}[/]\n[dim]Saved in {path}[/]"
 
 
 def _set_warmup_mode_and_return(mode: str) -> MenuActionResult:
@@ -956,7 +961,7 @@ def _set_warmup_mode_and_return(mode: str) -> MenuActionResult:
 
 def _prewarm_rag_now_and_return() -> MenuActionResult:
     """Prewarm RAG and keep the feedback inline inside the TUI."""
-    from mmcp.server import prewarm_rag_now
+    from mmcp.presentation.mcp.server import prewarm_rag_now
 
     result = prewarm_rag_now()
     message = (
@@ -1070,13 +1075,13 @@ def _build_main_tui_menu() -> MenuScreen:
             MenuItem("Config", "Warmup settings and configurable operational actions.", submenu=_build_config_menu()),
             MenuItem("Metrics", "Info, health, telemetry, and diagnostic resources.", submenu=_build_metrics_menu()),
         ],
-        help_text="j/k: navigate • enter: select • esc: back • q: quit",
+        help_text="j/k: navigate ΓÇó enter: select ΓÇó esc: back ΓÇó q: quit",
     )
 
 
 def prewarm_rag_now_cli():
     """Explicit CLI action to prewarm the RAG model immediately."""
-    from mmcp.server import prewarm_rag_now
+    from mmcp.presentation.mcp.server import prewarm_rag_now
 
     result = prewarm_rag_now()
     CONSOLE.print(
@@ -1085,7 +1090,7 @@ def prewarm_rag_now_cli():
             f"[bold]Already loaded:[/] {'yes' if result['already_loaded'] else 'no'}\n"
             f"[bold]Model loaded:[/] {'yes' if result['model_loaded'] else 'no'}\n\n"
             f"{result['message']}",
-            title="🔥 Prewarm RAG Now",
+            title="≡ƒöÑ Prewarm RAG Now",
             border_style="green",
             box=box.ROUNDED,
         )
@@ -1110,7 +1115,7 @@ def do_rag_warmup_command(args: list[str]):
             message = _show_saved_warmup_mode(args[1])
         except ValueError as exc:
             raise SystemExit(str(exc)) from exc
-        CONSOLE.print(Panel(message, title="⚙️ Warmup Updated", border_style="green", box=box.ROUNDED))
+        CONSOLE.print(Panel(message, title="ΓÜÖ∩╕Å Warmup Updated", border_style="green", box=box.ROUNDED))
         show_rag_warmup_info()
         return
 
@@ -1127,7 +1132,7 @@ def do_rag_warmup_command(args: list[str]):
 
 def _build_info_content():
     """Build the compact system info renderables (does NOT print)."""
-    from mmcp.config import _default_config_path, get_config
+    from mmcp.infrastructure.environment.config import _default_config_path, get_config
 
     cfg = get_config()
     deps = [
@@ -1142,27 +1147,27 @@ def _build_info_content():
     for name, importable in deps:
         ok, ver = _safe_import_check(importable)
         status = "[green]installed[/]" if ok else "[red]missing[/]"
-        dependency_lines.append(f"[bold]{name}[/] — {status} • [dim]{ver}[/]")
+        dependency_lines.append(f"[bold]{name}[/] ΓÇö {status} ΓÇó [dim]{ver}[/]")
 
     tool_lines = [
-        "[bold]tokens[/] — count_tokens_tool, count_messages_tokens_tool",
-        "[bold]history[/] — optimize_messages",
-        "[bold]rag[/] — search_context, index_knowledge, rag_stats, clear_knowledge",
-        "[bold]runtime[/] — prewarm_rag, cache_context, reset_token_budget",
-        "[bold]advice[/] — get_orchestration_advice",
+        "[bold]tokens[/] ΓÇö count_tokens_tool, count_messages_tokens_tool",
+        "[bold]history[/] ΓÇö optimize_messages",
+        "[bold]rag[/] ΓÇö search_context, index_knowledge, rag_stats, clear_knowledge",
+        "[bold]runtime[/] ΓÇö prewarm_rag, cache_context, reset_token_budget",
+        "[bold]advice[/] ΓÇö get_orchestration_advice",
     ]
     resource_lines = [
-        "[bold]status://token_budget[/] — token budget consumption",
-        "[bold]cache://status[/] — cache hit/miss stats",
-        "[bold]rag://stats[/] — RAG knowledge base info",
-        "[bold]status://rag_warmup[/] — warmup mode and MCP impact",
-        "[bold]status://orchestrator[/] — detected orchestrator",
-        "[bold]status://orchestration[/] — orchestration contract",
+        "[bold]status://token_budget[/] ΓÇö token budget consumption",
+        "[bold]cache://status[/] ΓÇö cache hit/miss stats",
+        "[bold]rag://stats[/] ΓÇö RAG knowledge base info",
+        "[bold]status://rag_warmup[/] ΓÇö warmup mode and MCP impact",
+        "[bold]status://orchestrator[/] ΓÇö detected orchestrator",
+        "[bold]status://orchestration[/] ΓÇö orchestration contract",
     ]
 
     return _stack_renderables(
         _compact_panel(
-            "🖥 System",
+            "≡ƒûÑ System",
             [
                 ("Version", f"v{get_version()}"),
                 ("Python", f"{sys.version_info.major}.{sys.version_info.minor}.{sys.version_info.micro}"),
@@ -1172,7 +1177,7 @@ def _build_info_content():
             border_style="blue",
         ),
         _compact_panel(
-            "⚙️ Config",
+            "ΓÜÖ∩╕Å Config",
             [
                 ("Config file", str(_default_config_path())),
                 ("Data dir", str(cfg.resolve_data_dir())),
@@ -1185,11 +1190,11 @@ def _build_info_content():
         ),
         _build_rag_warmup_summary_panel(),
         _build_rag_warmup_table(),
-        _compact_list_panel("📦 Dependencies", dependency_lines, border_style="green"),
-        _compact_list_panel("⚡ Tools", tool_lines, border_style="magenta"),
-        _compact_list_panel("📊 Resources", resource_lines, border_style="yellow"),
+        _compact_list_panel("≡ƒôª Dependencies", dependency_lines, border_style="green"),
+        _compact_list_panel("ΓÜí Tools", tool_lines, border_style="magenta"),
+        _compact_list_panel("≡ƒôè Resources", resource_lines, border_style="yellow"),
         _compact_list_panel(
-            "🔌 Integration",
+            "≡ƒöî Integration",
             [
                 '[bold]"context-life"[/] { type: "local" }',
                 '[bold]command[/] ["context-life"]',
@@ -1202,7 +1207,7 @@ def _build_info_content():
 
 def _build_info_pages() -> list[DetailPage]:
     """Split dense info data into compact navigable pages."""
-    from mmcp.config import _default_config_path, get_config
+    from mmcp.infrastructure.environment.config import _default_config_path, get_config
 
     cfg = get_config()
     deps = [
@@ -1217,22 +1222,22 @@ def _build_info_pages() -> list[DetailPage]:
     for name, importable in deps:
         ok, ver = _safe_import_check(importable)
         status = "[green]installed[/]" if ok else "[red]missing[/]"
-        dependency_lines.append(f"[bold]{name}[/] — {status} • [dim]{ver}[/]")
+        dependency_lines.append(f"[bold]{name}[/] ΓÇö {status} ΓÇó [dim]{ver}[/]")
 
     tool_lines = [
-        "[bold]tokens[/] — count_tokens_tool, count_messages_tokens_tool",
-        "[bold]history[/] — optimize_messages",
-        "[bold]rag[/] — search_context, index_knowledge, rag_stats, clear_knowledge",
-        "[bold]runtime[/] — prewarm_rag, cache_context, reset_token_budget",
-        "[bold]advice[/] — get_orchestration_advice",
+        "[bold]tokens[/] ΓÇö count_tokens_tool, count_messages_tokens_tool",
+        "[bold]history[/] ΓÇö optimize_messages",
+        "[bold]rag[/] ΓÇö search_context, index_knowledge, rag_stats, clear_knowledge",
+        "[bold]runtime[/] ΓÇö prewarm_rag, cache_context, reset_token_budget",
+        "[bold]advice[/] ΓÇö get_orchestration_advice",
     ]
     resource_lines = [
-        "[bold]status://token_budget[/] — token budget consumption",
-        "[bold]cache://status[/] — cache hit/miss stats",
-        "[bold]rag://stats[/] — RAG knowledge base info",
-        "[bold]status://rag_warmup[/] — warmup mode and MCP impact",
-        "[bold]status://orchestrator[/] — detected orchestrator",
-        "[bold]status://orchestration[/] — orchestration contract",
+        "[bold]status://token_budget[/] ΓÇö token budget consumption",
+        "[bold]cache://status[/] ΓÇö cache hit/miss stats",
+        "[bold]rag://stats[/] ΓÇö RAG knowledge base info",
+        "[bold]status://rag_warmup[/] ΓÇö warmup mode and MCP impact",
+        "[bold]status://orchestrator[/] ΓÇö detected orchestrator",
+        "[bold]status://orchestration[/] ΓÇö orchestration contract",
     ]
 
     return [
@@ -1324,7 +1329,7 @@ def do_upgrade(target_version: str | None = None, dry_run: bool = False):
             tag, release_url = _fetch_latest_release()
 
     if not tag:
-        CONSOLE.print("\n  [bold yellow]⚠ Could not fetch release info from GitHub[/]")
+        CONSOLE.print("\n  [bold yellow]ΓÜá Could not fetch release info from GitHub[/]")
         CONSOLE.print("  [dim]Falling back to latest from repository...[/]\n")
         tag = None
         install_target = f"git+{REPO_URL}"
@@ -1337,7 +1342,7 @@ def do_upgrade(target_version: str | None = None, dry_run: bool = False):
                 f"[bold]Current version:[/] [yellow]v{old_version}[/]\n"
                 f"[bold]Target version:[/]  [green]v{tag or 'latest'}[/]"
                 + (f"\n[dim]{release_url}[/]" if release_url else ""),
-                title="🔄 Context-Life Upgrade",
+                title="≡ƒöä Context-Life Upgrade",
                 border_style="yellow",
                 box=box.ROUNDED,
             )
@@ -1345,11 +1350,11 @@ def do_upgrade(target_version: str | None = None, dry_run: bool = False):
     )
 
     if tag and tag == old_version:
-        CONSOLE.print(f"\n  [bold green]✓ Already up to date[/] [dim](v{old_version})[/]\n")
+        CONSOLE.print(f"\n  [bold green]Γ£ô Already up to date[/] [dim](v{old_version})[/]\n")
         return
 
     if dry_run:
-        CONSOLE.print(f"\n  [bold cyan]ℹ Dry run:[/] would install [green]v{tag or 'latest'}[/]")
+        CONSOLE.print(f"\n  [bold cyan]Γä╣ Dry run:[/] would install [green]v{tag or 'latest'}[/]")
         CONSOLE.print(f"  [dim]pip install --upgrade {install_target}[/]\n")
         return
 
@@ -1363,20 +1368,20 @@ def do_upgrade(target_version: str | None = None, dry_run: bool = False):
     if result.returncode == 0:
         new_version = get_version()
         if new_version != old_version:
-            CONSOLE.print(f"\n  [bold green]✓ Upgraded![/] [yellow]v{old_version}[/] → [green]v{new_version}[/]\n")
+            CONSOLE.print(f"\n  [bold green]Γ£ô Upgraded![/] [yellow]v{old_version}[/] ΓåÆ [green]v{new_version}[/]\n")
         else:
-            CONSOLE.print(f"\n  [bold green]✓ Already up to date[/] [dim](v{new_version})[/]\n")
+            CONSOLE.print(f"\n  [bold green]Γ£ô Already up to date[/] [dim](v{new_version})[/]\n")
         for line in result.stdout.strip().split("\n")[-5:]:
             CONSOLE.print(f"  [dim]{line}[/]")
     else:
-        CONSOLE.print("\n  [bold red]✗ Upgrade failed[/]\n")
+        CONSOLE.print("\n  [bold red]Γ£ù Upgrade failed[/]\n")
         CONSOLE.print(f"  [red]{result.stderr.strip()[:500]}[/]")
         sys.exit(1)
 
 
 def _build_doctor_content():
     """Build compact doctor diagnostics renderables (does NOT print)."""
-    from mmcp.config import _default_config_path, get_config, get_rag_warmup_mode_details
+    from mmcp.infrastructure.environment.config import _default_config_path, get_config, get_rag_warmup_mode_details
 
     ver = get_version()
     checks: list[tuple[str, str, str]] = []  # (name, status, detail)
@@ -1384,10 +1389,10 @@ def _build_doctor_content():
     # 1. Python version
     py_ver = f"{sys.version_info.major}.{sys.version_info.minor}.{sys.version_info.micro}"
     py_ok = sys.version_info >= (3, 10)
-    checks.append(("Python version", "✅" if py_ok else "❌", f"{py_ver} {'(>= 3.10 required)' if not py_ok else ''}"))
+    checks.append(("Python version", "Γ£à" if py_ok else "Γ¥î", f"{py_ver} {'(>= 3.10 required)' if not py_ok else ''}"))
 
     # 2. Package version
-    checks.append(("Installed version", "✅", f"v{ver}"))
+    checks.append(("Installed version", "Γ£à", f"v{ver}"))
 
     # 3. Dependencies
     critical_deps = [
@@ -1400,29 +1405,29 @@ def _build_doctor_content():
     ]
     for name, importable in critical_deps:
         ok, dep_ver = _safe_import_check(importable)
-        checks.append((f"  {name}", "✅" if ok else "❌", dep_ver))
+        checks.append((f"  {name}", "Γ£à" if ok else "Γ¥î", dep_ver))
 
     # 4. Config file
     cfg_path = _default_config_path()
     cfg_exists = cfg_path.exists()
     checks.append(
-        ("Config file", "✅" if cfg_exists else "ℹ️", f"{cfg_path}" + (" (using defaults)" if not cfg_exists else ""))
+        ("Config file", "Γ£à" if cfg_exists else "Γä╣∩╕Å", f"{cfg_path}" + (" (using defaults)" if not cfg_exists else ""))
     )
 
     # 5. Data directory
     cfg = get_config()
     data_dir = cfg.resolve_data_dir()
-    checks.append(("Data directory", "✅", str(data_dir)))
+    checks.append(("Data directory", "Γ£à", str(data_dir)))
 
     # 6. LanceDB path
     rag_path = Path(cfg.resolve_rag_db_path())
     rag_writable = os.access(rag_path.parent, os.W_OK) if rag_path.parent.exists() else False
     checks.append(
-        ("LanceDB path", "✅" if rag_writable else "⚠️", f"{rag_path}" + (" (not writable)" if not rag_writable else ""))
+        ("LanceDB path", "Γ£à" if rag_writable else "ΓÜá∩╕Å", f"{rag_path}" + (" (not writable)" if not rag_writable else ""))
     )
 
     warmup = get_rag_warmup_mode_details(cfg.rag_warmup_mode)
-    checks.append(("RAG warmup mode", "✅", f"{cfg.rag_warmup_mode} — {warmup['current']['startup_impact']}"))
+    checks.append(("RAG warmup mode", "Γ£à", f"{cfg.rag_warmup_mode} ΓÇö {warmup['current']['startup_impact']}"))
 
     # 7. Model cache
     model_cache = Path.home() / ".cache" / "huggingface"
@@ -1432,7 +1437,7 @@ def _build_doctor_content():
     checks.append(
         (
             "Model cache",
-            "✅" if cache_exists else "ℹ️",
+            "Γ£à" if cache_exists else "Γä╣∩╕Å",
             f"{model_cache}" + (" (will download on first use)" if not cache_exists else ""),
         )
     )
@@ -1448,19 +1453,19 @@ def _build_doctor_content():
         checks.append(
             (
                 "Latest release",
-                "✅" if is_latest else "⬆️",
+                "Γ£à" if is_latest else "Γ¼å∩╕Å",
                 f"v{latest_tag}" + ("" if is_latest else f" (you have v{ver})"),
             )
         )
     else:
-        checks.append(("Latest release", "⚠️", "Could not reach GitHub API"))
+        checks.append(("Latest release", "ΓÜá∩╕Å", "Could not reach GitHub API"))
 
-    has_errors = any(s == "❌" for _, s, _ in checks)
+    has_errors = any(s == "Γ¥î" for _, s, _ in checks)
     summary_panel = Panel(
         "[bold red]Some checks failed.[/] Fix the red items and run again."
         if has_errors
         else "[bold green]All checks passed.[/] Context-Life is ready to use.",
-        title="🩺 Health Summary",
+        title="≡ƒ⌐║ Health Summary",
         border_style="red" if has_errors else "green",
         box=box.ROUNDED,
         padding=(0, 1),
@@ -1472,7 +1477,7 @@ def _build_doctor_content():
     release_checks = checks[11:]
 
     def _lines_for(items: list[tuple[str, str, str]]) -> list[str]:
-        return [f"{status} [bold]{name}[/] — [dim]{detail}[/]" for name, status, detail in items]
+        return [f"{status} [bold]{name}[/] ΓÇö [dim]{detail}[/]" for name, status, detail in items]
 
     return _stack_renderables(
         summary_panel,
@@ -1495,14 +1500,14 @@ def _build_doctor_content():
 
 def _build_doctor_pages() -> list[DetailPage]:
     """Split health diagnostics into smaller pages."""
-    from mmcp.config import _default_config_path, get_config, get_rag_warmup_mode_details
+    from mmcp.infrastructure.environment.config import _default_config_path, get_config, get_rag_warmup_mode_details
 
     ver = get_version()
     checks: list[tuple[str, str, str]] = []
     py_ver = f"{sys.version_info.major}.{sys.version_info.minor}.{sys.version_info.micro}"
     py_ok = sys.version_info >= (3, 10)
-    checks.append(("Python version", "✅" if py_ok else "❌", f"{py_ver} {'(>= 3.10 required)' if not py_ok else ''}"))
-    checks.append(("Installed version", "✅", f"v{ver}"))
+    checks.append(("Python version", "Γ£à" if py_ok else "Γ¥î", f"{py_ver} {'(>= 3.10 required)' if not py_ok else ''}"))
+    checks.append(("Installed version", "Γ£à", f"v{ver}"))
 
     critical_deps = [
         ("mcp", "mcp"),
@@ -1514,26 +1519,26 @@ def _build_doctor_pages() -> list[DetailPage]:
     ]
     for name, importable in critical_deps:
         ok, dep_ver = _safe_import_check(importable)
-        checks.append((f"  {name}", "✅" if ok else "❌", dep_ver))
+        checks.append((f"  {name}", "Γ£à" if ok else "Γ¥î", dep_ver))
 
     cfg_path = _default_config_path()
     cfg_exists = cfg_path.exists()
     checks.append(
-        ("Config file", "✅" if cfg_exists else "ℹ️", f"{cfg_path}" + (" (using defaults)" if not cfg_exists else ""))
+        ("Config file", "Γ£à" if cfg_exists else "Γä╣∩╕Å", f"{cfg_path}" + (" (using defaults)" if not cfg_exists else ""))
     )
 
     cfg = get_config()
     data_dir = cfg.resolve_data_dir()
-    checks.append(("Data directory", "✅", str(data_dir)))
+    checks.append(("Data directory", "Γ£à", str(data_dir)))
 
     rag_path = Path(cfg.resolve_rag_db_path())
     rag_writable = os.access(rag_path.parent, os.W_OK) if rag_path.parent.exists() else False
     checks.append(
-        ("LanceDB path", "✅" if rag_writable else "⚠️", f"{rag_path}" + (" (not writable)" if not rag_writable else ""))
+        ("LanceDB path", "Γ£à" if rag_writable else "ΓÜá∩╕Å", f"{rag_path}" + (" (not writable)" if not rag_writable else ""))
     )
 
     warmup = get_rag_warmup_mode_details(cfg.rag_warmup_mode)
-    checks.append(("RAG warmup mode", "✅", f"{cfg.rag_warmup_mode} — {warmup['current']['startup_impact']}"))
+    checks.append(("RAG warmup mode", "Γ£à", f"{cfg.rag_warmup_mode} ΓÇö {warmup['current']['startup_impact']}"))
 
     model_cache = Path.home() / ".cache" / "huggingface"
     if os.name == "nt":
@@ -1542,7 +1547,7 @@ def _build_doctor_pages() -> list[DetailPage]:
     checks.append(
         (
             "Model cache",
-            "✅" if cache_exists else "ℹ️",
+            "Γ£à" if cache_exists else "Γä╣∩╕Å",
             f"{model_cache}" + (" (will download on first use)" if not cache_exists else ""),
         )
     )
@@ -1557,14 +1562,14 @@ def _build_doctor_pages() -> list[DetailPage]:
         checks.append(
             (
                 "Latest release",
-                "✅" if is_latest else "⬆️",
+                "Γ£à" if is_latest else "Γ¼å∩╕Å",
                 f"v{latest_tag}" + ("" if is_latest else f" (you have v{ver})"),
             )
         )
     else:
-        checks.append(("Latest release", "⚠️", "Could not reach GitHub API"))
+        checks.append(("Latest release", "ΓÜá∩╕Å", "Could not reach GitHub API"))
 
-    has_errors = any(s == "❌" for _, s, _ in checks)
+    has_errors = any(s == "Γ¥î" for _, s, _ in checks)
 
     runtime_checks = checks[:2] + [checks[-1]]
     dependency_checks = checks[2:8]
@@ -1572,7 +1577,7 @@ def _build_doctor_pages() -> list[DetailPage]:
     release_checks = checks[11:]
 
     def _lines_for(items: list[tuple[str, str, str]]) -> list[str]:
-        return [f"{status} [bold]{name}[/] — [dim]{detail}[/]" for name, status, detail in items]
+        return [f"{status} [bold]{name}[/] ΓÇö [dim]{detail}[/]" for name, status, detail in items]
 
     return [
         DetailPage(
@@ -1641,7 +1646,7 @@ def show_help():
     """Print usage help."""
     print_banner()
 
-    help_table = Table(title="📖 Commands", box=box.ROUNDED, border_style="cyan", title_style="bold cyan")
+    help_table = Table(title="≡ƒôû Commands", box=box.ROUNDED, border_style="cyan", title_style="bold cyan")
     help_table.add_column("Command", style="bold white", width=40)
     help_table.add_column("Description", style="white")
 
@@ -1683,8 +1688,8 @@ def format_big_number(n: int | float) -> str:
 
 def _build_telemetry_content():
     """Build the compact telemetry dashboard renderables (does NOT print)."""
-    from mmcp.config import get_config
-    from mmcp.session_store import SessionStore
+    from mmcp.infrastructure.environment.config import get_config
+    from mmcp.infrastructure.persistence.session_store import SessionStore
 
     cfg = get_config()
     store = SessionStore(cfg.resolve_cache_db_path())
@@ -1707,15 +1712,15 @@ def _build_telemetry_content():
             transformed = data["output_tokens"]
             saved = data["saved_tokens"]
             usage_lines.append(
-                f"[bold]{model_name}[/] — input {format_big_number(used)} • "
-                f"output {format_big_number(transformed)} • saved {format_big_number(saved)}"
+                f"[bold]{model_name}[/] ΓÇö input {format_big_number(used)} ΓÇó "
+                f"output {format_big_number(transformed)} ΓÇó saved {format_big_number(saved)}"
             )
         if len(sorted_models) > 6:
             usage_lines.append(f"[dim]+ {len(sorted_models) - 6} more model(s) not shown[/]")
 
     return _stack_renderables(
         _compact_panel(
-            "💰 Telemetry",
+            "≡ƒÆ░ Telemetry",
             [
                 ("Accounted input", format_big_number(accounted_input)),
                 ("Output", format_big_number(output_tokens)),
@@ -1725,7 +1730,7 @@ def _build_telemetry_content():
             border_style="green",
         ),
         _compact_panel(
-            "📅 Budget reference",
+            "≡ƒôà Budget reference",
             [
                 ("Window", "Rolling 7 days"),
                 ("Default request budget", format_big_number(budget)),
@@ -1749,8 +1754,8 @@ def _build_telemetry_content():
 
 def _build_telemetry_pages() -> list[DetailPage]:
     """Split telemetry into overview and per-model usage pages."""
-    from mmcp.config import get_config
-    from mmcp.session_store import SessionStore
+    from mmcp.infrastructure.environment.config import get_config
+    from mmcp.infrastructure.persistence.session_store import SessionStore
 
     cfg = get_config()
     store = SessionStore(cfg.resolve_cache_db_path())
@@ -1773,8 +1778,8 @@ def _build_telemetry_pages() -> list[DetailPage]:
             transformed = data["output_tokens"]
             saved = data["saved_tokens"]
             usage_lines.append(
-                f"[bold]{model_name}[/] — input {format_big_number(used)} • "
-                f"output {format_big_number(transformed)} • saved {format_big_number(saved)}"
+                f"[bold]{model_name}[/] ΓÇö input {format_big_number(used)} ΓÇó "
+                f"output {format_big_number(transformed)} ΓÇó saved {format_big_number(saved)}"
             )
 
     return [
@@ -1782,7 +1787,7 @@ def _build_telemetry_pages() -> list[DetailPage]:
             title="Overview",
             renderable_builder=lambda: _stack_renderables(
                 _compact_panel(
-                    "💰 Telemetry",
+                    "≡ƒÆ░ Telemetry",
                     [
                         ("Accounted input", format_big_number(accounted_input)),
                         ("Output", format_big_number(output_tokens)),
@@ -1792,7 +1797,7 @@ def _build_telemetry_pages() -> list[DetailPage]:
                     border_style="green",
                 ),
                 _compact_panel(
-                    "📅 Budget reference",
+                    "≡ƒôà Budget reference",
                     [
                         ("Window", "Rolling 7 days"),
                         ("Default request budget", format_big_number(budget)),
@@ -1858,7 +1863,7 @@ def _show_in_scrollable_screen(renderable, title: str = "View"):
     temp_console.print(renderable)
     content_lines = buf.getvalue().split("\n")
 
-    # Strip trailing empty lines — Rich adds them and they inflate the
+    # Strip trailing empty lines ΓÇö Rich adds them and they inflate the
     # line count, breaking vertical centering calculations.
     while content_lines and content_lines[-1].strip() == "":
         content_lines.pop()
@@ -1909,9 +1914,9 @@ def _show_in_scrollable_screen(renderable, title: str = "View"):
         # Footer on the last row of the terminal
         pos_pct = int((scroll_offset / max(1, max_offset)) * 100) if max_offset > 0 else 100
         if max_offset > 0:
-            footer = f"  ↑/↓/j/k scroll · PgUp/PgDn jump · {pos_pct}%  |  ESC/b/q → back"
+            footer = f"  Γåæ/Γåô/j/k scroll ┬╖ PgUp/PgDn jump ┬╖ {pos_pct}%  |  ESC/b/q ΓåÆ back"
         else:
-            footer = "  All content visible  |  ESC/b/q → back"
+            footer = "  All content visible  |  ESC/b/q ΓåÆ back"
 
         write(f"\033[{term_height};1H\033[2K\033[2;3m{footer.center(term_width)}\033[0m")
         flush()
@@ -1986,7 +1991,7 @@ def _show_in_scrollable_screen(renderable, title: str = "View"):
             elif c == "pgup":
                 scroll_offset -= viewport_height - 2
 
-            # Clamp BEFORE comparing — avoids repaint if already at boundary
+            # Clamp BEFORE comparing ΓÇö avoids repaint if already at boundary
             scroll_offset = max(0, min(scroll_offset, max_offset))
             if scroll_offset != prev_offset:
                 paint()

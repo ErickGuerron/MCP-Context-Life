@@ -2,7 +2,7 @@ from pathlib import Path
 
 import pytest
 
-from mmcp.config import get_config, reset_config
+from mmcp.infrastructure.environment.config import get_config, reset_config
 
 
 @pytest.fixture(autouse=True)

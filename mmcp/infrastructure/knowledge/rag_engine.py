@@ -1,17 +1,17 @@
-"""
-RAG Engine Module — Context-Life (CL)
+﻿"""
+RAG Engine Module ΓÇö Context-Life (CL)
 
 Local Retrieval-Augmented Generation using:
   - LanceDB as the vector database (serverless, file-based)
   - sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2 for embeddings
 
-Zero external API calls — everything runs on CPU locally.
+Zero external API calls ΓÇö everything runs on CPU locally.
 
 RFC Improvements Applied:
-  - P1 (RFC-002): Lazy model loading — embedding model deferred until first use
-  - P3 (RFC-001): Real deduplication by file_hash — skips re-indexing unchanged files
-  - P4 (RFC-001): max_tokens budget for RAG results — truncates to fit token limit
-  - P6 (RFC-001): Stricter retrieval — min_score filter, per-source dedup, max_chunks_per_source
+  - P1 (RFC-002): Lazy model loading ΓÇö embedding model deferred until first use
+  - P3 (RFC-001): Real deduplication by file_hash ΓÇö skips re-indexing unchanged files
+  - P4 (RFC-001): max_tokens budget for RAG results ΓÇö truncates to fit token limit
+  - P6 (RFC-001): Stricter retrieval ΓÇö min_score filter, per-source dedup, max_chunks_per_source
 """
 
 from __future__ import annotations
@@ -26,7 +26,7 @@ from typing import Optional
 import lancedb
 import pyarrow.compute as pc
 
-from mmcp.token_counter import DEFAULT_ENCODING, count_tokens
+from mmcp.infrastructure.tokens.token_counter import DEFAULT_ENCODING, count_tokens
 
 # --- Configuration ---
 DEFAULT_TABLE_NAME = "knowledge"
@@ -154,12 +154,12 @@ class RAGEngine:
     """
     Local RAG engine backed by LanceDB + multilingual sentence-transformers.
 
-    RFC-002 P1: The embedding model is loaded LAZILY — not at construction time.
+    RFC-002 P1: The embedding model is loaded LAZILY ΓÇö not at construction time.
     This means RAGEngine() is instant (~0ms) and the ~12s model load only
     happens when search() or index_file() is first called.
 
     Usage:
-        engine = RAGEngine()          # instant — no model loaded
+        engine = RAGEngine()          # instant ΓÇö no model loaded
         engine.index_file("/path/to/docs/architecture.md")  # model loads here
         results = engine.search("How does auth work?", top_k=5)
     """
@@ -182,12 +182,12 @@ class RAGEngine:
         # Ensure DB directory exists
         Path(resolved_db_path).mkdir(parents=True, exist_ok=True)
 
-        # RFC-002 P1: These are ALL deferred — no model loading here
+        # RFC-002 P1: These are ALL deferred ΓÇö no model loading here
         self._embedding_fn = None
         self._schema = None
         self._model_loaded = False
 
-        # Connect to LanceDB (lightweight — no model needed)
+        # Connect to LanceDB (lightweight ΓÇö no model needed)
         self._db = lancedb.connect(resolved_db_path)
         self._table = None
 
@@ -409,7 +409,7 @@ class RAGEngine:
             extensions: File extensions to include (e.g. [".md", ".py", ".txt"])
                         Defaults to common text/code files.
             recursive: Whether to recurse into subdirectories
-            force: P3 — force re-index even if files haven't changed
+            force: P3 ΓÇö force re-index even if files haven't changed
         """
         if extensions is None:
             extensions = [
@@ -472,12 +472,12 @@ class RAGEngine:
         """
         Perform semantic search over the indexed knowledge base.
 
-        P4: max_tokens — If > 0, truncates results so total text
+        P4: max_tokens ΓÇö If > 0, truncates results so total text
             fits within the token budget. Prevents RAG from flooding
             the context window.
-        P6: min_score — Filter out results above this distance threshold
+        P6: min_score ΓÇö Filter out results above this distance threshold
             (cosine distance: lower = more similar, so higher = worse).
-        P6: max_chunks_per_source — Limit chunks per source file
+        P6: max_chunks_per_source ΓÇö Limit chunks per source file
             to avoid one file dominating the RAG context.
 
         Args:
@@ -572,7 +572,7 @@ class RAGEngine:
                 try:
                     self._table = self._db.open_table(self.table_name)
                 except Exception:
-                    # Table doesn't exist — return empty stats without loading model
+                    # Table doesn't exist ΓÇö return empty stats without loading model
                     return {
                         "table": self.table_name,
                         "total_chunks": 0,

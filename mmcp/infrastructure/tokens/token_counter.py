@@ -1,13 +1,13 @@
-"""
-Token Counter Module — Context-Life (CL)
+﻿"""
+Token Counter Module ΓÇö Context-Life (CL)
 
 Provides fast, accurate token counting using tiktoken.
 Supports multiple encoding schemes and applies a configurable
 safety buffer to avoid context window overflows.
 
 RFC-002 Improvements:
-  - P2: LRU cache for token counts — avoids redundant tiktoken calls
-  - P2: Cached encoder objects — avoids repeated get_encoding() lookups
+  - P2: LRU cache for token counts ΓÇö avoids redundant tiktoken calls
+  - P2: Cached encoder objects ΓÇö avoids repeated get_encoding() lookups
 """
 
 from __future__ import annotations
@@ -20,13 +20,13 @@ from typing import Literal
 import tiktoken
 
 # --- Supported Encodings ---
-# cl100k_base  → GPT-4, GPT-3.5-turbo, Claude (close approximation)
-# o200k_base   → GPT-4o, GPT-4o-mini
-# p50k_base    → Codex, text-davinci
+# cl100k_base  ΓåÆ GPT-4, GPT-3.5-turbo, Claude (close approximation)
+# o200k_base   ΓåÆ GPT-4o, GPT-4o-mini
+# p50k_base    ΓåÆ Codex, text-davinci
 SUPPORTED_ENCODINGS = ("cl100k_base", "o200k_base", "p50k_base")
 DEFAULT_ENCODING = "cl100k_base"
 
-# 5% safety buffer — we never fill to the absolute limit
+# 5% safety buffer ΓÇö we never fill to the absolute limit
 DEFAULT_SAFETY_BUFFER = 0.05
 
 # RFC-002 P2: Minimum string length to cache (avoid overhead for tiny strings)
@@ -108,7 +108,7 @@ def _cached_count(text: str, encoding_name: str) -> int:
     """
     LRU-cached token count.
 
-    Uses Python's native hash on the (text, encoding_name) tuple — faster
+    Uses Python's native hash on the (text, encoding_name) tuple ΓÇö faster
     than SHA-256 and sufficient for an in-process LRU cache.
     """
     encoder = get_encoder(encoding_name)
@@ -127,7 +127,7 @@ def count_tokens(
     enforcement ladder.
     """
     if len(text) < _MIN_CACHE_LENGTH:
-        # Short strings — direct count, no cache overhead
+        # Short strings ΓÇö direct count, no cache overhead
         encoder = get_encoder(encoding_name)
         return len(encoder.encode(text))
 

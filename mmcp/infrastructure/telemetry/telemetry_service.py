@@ -1,5 +1,5 @@
-"""
-Telemetry Service Module — Context-Life (CL)
+﻿"""
+Telemetry Service Module ΓÇö Context-Life (CL)
 
 Implements SOLID & DDD principles to decouple the MCP server's core logic
 from the specific telemetry infrastructure (SessionStore/SQLite).
@@ -19,9 +19,9 @@ from functools import wraps
 from pathlib import Path
 from typing import Any, Callable
 
-from mmcp.config import get_config
-from mmcp.orchestrator_detector import get_orchestrator_info
-from mmcp.session_store import SessionStore, UsageEvent
+from mmcp.infrastructure.environment.config import get_config
+from mmcp.infrastructure.environment.orchestrator_detector import get_orchestrator_info
+from mmcp.infrastructure.persistence.session_store import SessionStore, UsageEvent
 
 _telemetry_store: SessionStore | None = None
 _telemetry_store_db_path: Path | None = None

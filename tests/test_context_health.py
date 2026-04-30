@@ -13,8 +13,8 @@ Verifies:
 
 import json
 
-from mmcp.token_counter import count_messages_tokens
-from mmcp.trim_history import (
+from mmcp.infrastructure.tokens.token_counter import count_messages_tokens
+from mmcp.infrastructure.context.trim_history import (
     _compute_redundancy_ratio,
     _compute_system_to_user_ratio,
     _estimate_noise,

@@ -1,8 +1,8 @@
-"""
-Orchestrator Detector Module — Context-Life (CL)
+﻿"""
+Orchestrator Detector Module ΓÇö Context-Life (CL)
 
 RFC-002 P3: Auto-detects when CL is running alongside an AI orchestrator
-(e.g., Gentle AI, Engram) to enable "Advisor Mode" — proactive hints
+(e.g., Gentle AI, Engram) to enable "Advisor Mode" ΓÇö proactive hints
 in tool responses about context health and optimization opportunities.
 
 Detection layers:
@@ -119,7 +119,7 @@ def _check_workspace_artifacts(cwd: Optional[str] = None) -> Optional[Orchestrat
                 advisor_mode=True,
             )
 
-    # OpenCode artifacts — workspace-first, with optional user-config fallback
+    # OpenCode artifacts ΓÇö workspace-first, with optional user-config fallback
     for root in opencode_roots:
         opencode_candidates = (
             (root / ".atl", ".atl/", ["atl", "skills", "workflows"]),

@@ -1,11 +1,11 @@
 import json
 import sqlite3
 
-from mmcp.config import get_config
-from mmcp.orchestrator_detector import OrchestratorInfo
-from mmcp.server import count_messages_tokens_tool
-from mmcp.session_store import SessionStore
-from mmcp.telemetry_service import _detect_model_context, _process_telemetry_event
+from mmcp.infrastructure.environment.config import get_config
+from mmcp.infrastructure.environment.orchestrator_detector import OrchestratorInfo
+from mmcp.infrastructure.persistence.session_store import SessionStore
+from mmcp.infrastructure.telemetry.telemetry_service import _detect_model_context, _process_telemetry_event
+from mmcp.presentation.mcp.server import count_messages_tokens_tool
 
 
 def test_detect_model_context_prefers_explicit_openai_env(monkeypatch):
@@ -33,11 +33,11 @@ def test_process_telemetry_event_uses_trim_diagnostics(monkeypatch):
 
     monkeypatch.setenv("OPENAI_MODEL", "gpt-5.4")
     monkeypatch.setattr(
-        "mmcp.telemetry_service.get_orchestrator_info",
+        "mmcp.infrastructure.telemetry.telemetry_service.get_orchestrator_info",
         lambda: OrchestratorInfo(is_detected=True, orchestrator_name="gentle-ai"),
     )
     monkeypatch.setattr(
-        "mmcp.telemetry_service.TelemetryService.log_usage",
+        "mmcp.infrastructure.telemetry.telemetry_service.TelemetryService.log_usage",
         lambda event: captured.setdefault("event", event),
     )
 
@@ -68,11 +68,11 @@ def test_process_telemetry_event_uses_cache_metadata_for_saved_tokens(monkeypatc
     captured = {}
 
     monkeypatch.setattr(
-        "mmcp.telemetry_service.get_orchestrator_info",
+        "mmcp.infrastructure.telemetry.telemetry_service.get_orchestrator_info",
         lambda: OrchestratorInfo(is_detected=True, orchestrator_name="opencode"),
     )
     monkeypatch.setattr(
-        "mmcp.telemetry_service.TelemetryService.log_usage",
+        "mmcp.infrastructure.telemetry.telemetry_service.TelemetryService.log_usage",
         lambda event: captured.setdefault("event", event),
     )
 
@@ -106,11 +106,11 @@ def test_process_telemetry_event_uses_nested_health_metrics(monkeypatch):
     captured = {}
 
     monkeypatch.setattr(
-        "mmcp.telemetry_service.get_orchestrator_info",
+        "mmcp.infrastructure.telemetry.telemetry_service.get_orchestrator_info",
         lambda: OrchestratorInfo(is_detected=True, orchestrator_name="opencode"),
     )
     monkeypatch.setattr(
-        "mmcp.telemetry_service.TelemetryService.log_usage",
+        "mmcp.infrastructure.telemetry.telemetry_service.TelemetryService.log_usage",
         lambda event: captured.setdefault("event", event),
     )
 
@@ -139,7 +139,7 @@ def test_process_telemetry_event_uses_nested_health_metrics(monkeypatch):
 def test_count_messages_tokens_persists_usage_to_active_sqlite_db(isolated_data_dir, monkeypatch):
     monkeypatch.setenv("OPENAI_MODEL", "gpt-5.4")
     monkeypatch.setattr(
-        "mmcp.telemetry_service.get_orchestrator_info",
+        "mmcp.infrastructure.telemetry.telemetry_service.get_orchestrator_info",
         lambda: OrchestratorInfo(is_detected=True, orchestrator_name="gentle-ai"),
     )
 

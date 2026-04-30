@@ -234,6 +234,15 @@ Edit `claude_desktop_config.json`:
 └───────────────────────────────────────────────────┘
 ```
 
+Composition now starts in `mmcp/presentation/mcp/server.py`, which wires MCP tools/resources to `mmcp/presentation/app_container.py`. The container owns the shared runtime objects and config-aware accessors, so the server can stay thin while preserving the public MCP surface.
+
+### Layer map
+
+- `mmcp/presentation/` — MCP + CLI entry adapters and composition root
+- `mmcp/application/` — vertical slices and ports
+- `mmcp/infrastructure/` — concrete adapters by responsibility (`environment/`, `persistence/`, `tokens/`, `knowledge/`, `context/`, `telemetry/`)
+- `mmcp/domain/` — reserved for pure rules if they are extracted later
+
 ---
 
 ## 📖 How It Works

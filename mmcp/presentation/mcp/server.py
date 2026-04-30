@@ -1,5 +1,5 @@
-"""
-Context-Life (CL) — LLM Context Optimization MCP Server
+﻿"""
+Context-Life (CL) ΓÇö LLM Context Optimization MCP Server
 
 The main MCP server that exposes all context optimization tools:
   - count_tokens: Count tokens in text or message arrays
@@ -18,25 +18,25 @@ from typing import Optional
 
 from mcp.server.fastmcp import FastMCP
 
-from mmcp.cache_manager import CacheLoop
-from mmcp.config import get_config, get_rag_warmup_mode_details
-from mmcp.orchestrator_detector import get_orchestrator_info
-from mmcp.rag_engine import RAGEngine
-from mmcp.telemetry_service import track_telemetry
-from mmcp.token_counter import (
+from mmcp.infrastructure.environment.config import get_config, get_rag_warmup_mode_details
+from mmcp.infrastructure.environment.orchestrator_detector import get_orchestrator_info
+from mmcp.infrastructure.knowledge.rag_engine import RAGEngine
+from mmcp.infrastructure.persistence.cache_manager import CacheLoop
+from mmcp.infrastructure.telemetry.telemetry_service import track_telemetry
+from mmcp.infrastructure.tokens.token_counter import (
     DEFAULT_ENCODING,
     TokenBudget,
     count_messages_tokens,
     count_tokens,
     get_cache_info,
 )
-from mmcp.trim_history import analyze_context_health, trim_messages
+from mmcp.infrastructure.context.trim_history import analyze_context_health, trim_messages
 
 # --- Server Instance ---
 mcp = FastMCP(
     "Context-Life",
     instructions=(
-        "Context-Life (CL) — LLM context optimization server. "
+        "Context-Life (CL) ΓÇö LLM context optimization server. "
         "Use these tools to count tokens, trim message history, "
         "search indexed knowledge via RAG, and optimize context caching."
     ),
@@ -114,6 +114,14 @@ def _get_rag_engine() -> RAGEngine:
         )
         _rag_engine_config_key = current_key
     return _rag_engine
+
+
+def _get_context_service():
+    return APP_CONTAINER.get_context_service()
+
+
+def _get_knowledge_service():
+    return APP_CONTAINER.get_knowledge_service()
 
 
 def initialize_runtime(force: bool = False) -> dict:

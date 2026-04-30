@@ -51,6 +51,8 @@ htmlcov/
 *.tar.gz
 *.zip
 
-# Internal docs and benchmarks (not public)
-docs/
+# Internal benchmarks (not public)
 benchmarks/
+
+# SDD registry cache
+.atl/

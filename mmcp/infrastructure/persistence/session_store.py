@@ -1,5 +1,5 @@
-"""
-Session Store Module — Context-Life (CL)
+﻿"""
+Session Store Module ΓÇö Context-Life (CL)
 
 Provides SQLite-backed persistence for cache metadata and usage telemetry.
 Ensures base prefix hashes survive process restarts, exposing real savings
@@ -14,7 +14,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Optional
 
-from mmcp.config import get_config
+from mmcp.infrastructure.environment.config import get_config
 
 
 @dataclass

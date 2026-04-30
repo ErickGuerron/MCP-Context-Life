@@ -1,7 +1,7 @@
 import json
 
-from mmcp.orchestrator_detector import reset_detection
-from mmcp.server import get_orchestration_advice, orchestration_resource
+from mmcp.infrastructure.environment.orchestrator_detector import reset_detection
+from mmcp.presentation.mcp.server import get_orchestration_advice, orchestration_resource
 
 
 def test_orchestration_resource_exposes_contract(monkeypatch):

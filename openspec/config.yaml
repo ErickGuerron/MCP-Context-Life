@@ -1,0 +1,62 @@
+schema: spec-driven
+mode: hybrid
+
+context: |
+  Tech stack: Python 3.10+ MCP server using mcp[cli], tiktoken, rich, LanceDB, sentence-transformers, and pyarrow.
+  Architecture: mmcp package with CLI/server modules, local-only context optimization, RAG, cache, and orchestration features.
+  Testing: pytest suite present; ruff used for linting and formatting; no dedicated integration/E2E stack detected.
+  Style: pyproject.toml-driven Python project; planning docs live in openspec/specs/; no project-level AGENTS/CLAUDE/GEMINI rules found.
+
+strict_tdd: true
+
+testing:
+  detected: 2026-04-30
+  strict_tdd: true
+  test_runner:
+    framework: pytest
+    command: pytest
+  layers:
+    unit:
+      available: true
+      tool: pytest
+    integration:
+      available: false
+      tool: none
+    e2e:
+      available: false
+      tool: none
+  coverage:
+    available: false
+    command: none
+  quality_tools:
+    linter:
+      available: true
+      command: ruff check
+    type_checker:
+      available: false
+      command: none
+    formatter:
+      available: true
+      command: ruff format
+
+rules:
+  proposal:
+    - Include rollback plan for risky changes.
+    - Identify affected modules and packages.
+  specs:
+    - Use Given/When/Then scenarios.
+    - Use RFC 2119 keywords (MUST, SHALL, SHOULD, MAY).
+  design:
+    - Include sequence diagrams for complex flows.
+    - Document architecture decisions with rationale.
+  tasks:
+    - Group tasks by phase and use hierarchical numbering.
+    - Keep tasks small enough to finish in one session.
+  apply:
+    - Follow existing code patterns and project conventions.
+    - Load relevant coding skills for the stack.
+  verify:
+    - Run tests when infrastructure exists.
+    - Compare implementation against every spec scenario.
+  archive:
+    - Warn before merging destructive deltas.

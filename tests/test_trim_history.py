@@ -1,4 +1,4 @@
-from mmcp.trim_history import count_messages_tokens, trim_messages
+from mmcp.infrastructure.context.trim_history import count_messages_tokens, trim_messages
 
 
 def test_trim_smart_protects_anchors():

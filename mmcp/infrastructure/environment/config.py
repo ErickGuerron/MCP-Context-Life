@@ -1,5 +1,5 @@
-"""
-Config Module — Context-Life (CL)
+﻿"""
+Config Module ΓÇö Context-Life (CL)
 
 Runtime configuration layer with three-tier resolution:
   1. Built-in defaults (always available)
@@ -66,21 +66,21 @@ def get_rag_warmup_mode_details(mode: Optional[str] = None) -> dict:
     modes = {
         "lazy": {
             "label": "Lazy (default)",
-            "startup_impact": "Fast MCP startup — no embedding model load during boot.",
+            "startup_impact": "Fast MCP startup ΓÇö no embedding model load during boot.",
             "first_use_impact": "First RAG search/index pays the model load cost.",
             "resource_impact": "Lowest idle CPU/RAM usage until RAG is used.",
             "mcp_impact": "Best default for general MCP usage when RAG might not be needed every session.",
         },
         "startup": {
             "label": "Startup",
-            "startup_impact": "Slower MCP startup — prewarms embeddings during server boot.",
+            "startup_impact": "Slower MCP startup ΓÇö prewarms embeddings during server boot.",
             "first_use_impact": "First RAG search/index is warm and ready sooner.",
             "resource_impact": "Higher upfront CPU/RAM cost because the model loads immediately.",
             "mcp_impact": "Useful when this MCP is expected to serve RAG right away on most sessions.",
         },
         "manual": {
             "label": "Manual",
-            "startup_impact": "Fast MCP startup — never prewarms automatically.",
+            "startup_impact": "Fast MCP startup ΓÇö never prewarms automatically.",
             "first_use_impact": "RAG stays cold until you explicitly prewarm or perform the first RAG action.",
             "resource_impact": "Keeps idle resource usage low and gives the user explicit control.",
             "mcp_impact": "Best when the operator wants full control over when the MCP spends warmup time.",
@@ -351,7 +351,7 @@ def load_config(config_path: Optional[str] = None) -> CLConfig:
     return config
 
 
-# Module-level singleton — lazy initialized
+# Module-level singleton ΓÇö lazy initialized
 _config: Optional[CLConfig] = None
 
 

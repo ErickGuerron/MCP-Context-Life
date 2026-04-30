@@ -1,5 +1,5 @@
-"""
-Cache Manager Module — Context-Life (CL)
+﻿"""
+Cache Manager Module ΓÇö Context-Life (CL)
 
 Implements context caching strategies to leverage provider-level
 prompt caching (Anthropic, Google Gemini, OpenAI).
@@ -16,7 +16,7 @@ RFC Improvements Applied:
   - P1: Real tiktoken counting instead of len//4 estimates
   - P2: Internal metadata (_mmcp_cache_control) stripped from messages,
          returned as separate metadata only
-  - P5: Canonical hash — normalizes whitespace/key order for stable hashing
+  - P5: Canonical hash ΓÇö normalizes whitespace/key order for stable hashing
 """
 
 from __future__ import annotations
@@ -27,9 +27,10 @@ import time
 from dataclasses import dataclass, field
 from typing import Optional
 
-from mmcp.config import get_config
-from mmcp.session_store import SessionStore
-from mmcp.token_counter import DEFAULT_ENCODING, count_tokens
+from mmcp.infrastructure.environment.config import get_config
+from mmcp.infrastructure.environment.orchestrator_detector import get_orchestrator_info
+from mmcp.infrastructure.persistence.session_store import SessionStore
+from mmcp.infrastructure.tokens.token_counter import DEFAULT_ENCODING, count_tokens
 
 
 def _canonicalize_content(content: str) -> str:
@@ -38,7 +39,7 @@ def _canonicalize_content(content: str) -> str:
 
     Strips irrelevant differences that don't affect semantics:
       - Trailing/leading whitespace per line
-      - Multiple consecutive blank lines → single blank line
+      - Multiple consecutive blank lines ΓåÆ single blank line
       - Trailing whitespace at end of content
 
     This prevents cache misses from minor formatting changes
@@ -119,10 +120,10 @@ class CacheStore:
     to serve it from their prompt cache.
     """
 
-    def __init__(self, max_entries: Optional[int] = None):
+    def __init__(self, max_entries: Optional[int] = None, session_store: Optional[PrefixCacheStorePort] = None):
         self._max_entries = max_entries or get_config().cache_max_entries
         self._entries: dict[str, CacheEntry] = {}
-        self._session_store = SessionStore()
+        self._session_store = session_store or SessionStore()
         self.stats = CacheStats()
 
     def lookup(self, content: str) -> tuple[bool, str]:
@@ -218,7 +219,7 @@ class CacheLoop:
     Flow:
       1. Separate messages into static (system/rag) and dynamic (user/assistant)
       2. Hash the static portion (P5: with canonical normalization)
-      3. If hash matches previous turn → prefix is cacheable
+      3. If hash matches previous turn ΓåÆ prefix is cacheable
       4. Return CLEAN messages (P2: no internal metadata)
          with cache info as SEPARATE metadata
     """
@@ -276,7 +277,7 @@ class CacheLoop:
         checks cache status, and returns result.
 
         P1: Uses real tiktoken counting for accurate metrics.
-        P2: Messages are returned CLEAN — no _mmcp_cache_control injected.
+        P2: Messages are returned CLEAN ΓÇö no _mmcp_cache_control injected.
             Cache info is in the separate 'cache_metadata' field.
         P5: Static prefix is canonicalized before hashing.
 
@@ -298,7 +299,7 @@ class CacheLoop:
             else:
                 dynamic_messages.append(msg)
 
-        # Phase 2: Build base prefix (system/developer only — NO RAG)
+        # Phase 2: Build base prefix (system/developer only ΓÇö NO RAG)
         base_content = json.dumps(static_messages, sort_keys=True)
         base_token_count = count_tokens(base_content, self._encoding)
         _, base_hash = self._store.lookup(base_content)
@@ -318,11 +319,11 @@ class CacheLoop:
 
         rag_control = self._update_rag_stability(rag_hash)
 
-        # Phase 4: P1 — Count full static prefix tokens with REAL tiktoken
+        # Phase 4: P1 ΓÇö Count full static prefix tokens with REAL tiktoken
         full_static_content = json.dumps(static_messages, sort_keys=True)
         static_token_count = count_tokens(full_static_content, self._encoding)
 
-        # Phase 5: P5 — Full prefix hash for overall cache hit detection
+        # Phase 5: P5 ΓÇö Full prefix hash for overall cache hit detection
         if rag_control["bypass_active"] and rag_hash is not None:
             is_cached = False
             content_hash = _hash_content(full_static_content)
@@ -343,10 +344,10 @@ class CacheLoop:
         if full_cache_hit:
             self._store.stats.tokens_saved += static_token_count
         elif base_cache_hit:
-            # Partial reuse — base prompt was cached even though RAG changed
+            # Partial reuse ΓÇö base prompt was cached even though RAG changed
             self._store.stats.tokens_saved += base_token_count
 
-        # Phase 7: P2 — Return CLEAN messages, NO internal metadata injected
+        # Phase 7: P2 ΓÇö Return CLEAN messages, NO internal metadata injected
         optimized_messages = static_messages + dynamic_messages
 
         total_token_count = count_tokens(json.dumps(optimized_messages, sort_keys=True), self._encoding)
@@ -377,8 +378,6 @@ class CacheLoop:
         }
 
         # RFC-002 Phase 3: Advisor hints when orchestrator is detected
-        from mmcp.orchestrator_detector import get_orchestrator_info
-
         orchestrator = get_orchestrator_info()
         if orchestrator.advisor_mode:
             # Compute advisor hints based on token usage patterns
@@ -392,9 +391,9 @@ class CacheLoop:
                 "prefix_stable": full_cache_hit,
                 "dynamic_token_ratio": dynamic_ratio,
                 "recommendation": (
-                    "Static prefix is stable — cache savings active."
+                    "Static prefix is stable ΓÇö cache savings active."
                     if full_cache_hit
-                    else "Static prefix changed — cache miss expected this turn."
+                    else "Static prefix changed ΓÇö cache miss expected this turn."
                 ),
             }
 

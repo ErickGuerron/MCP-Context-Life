@@ -1,15 +1,15 @@
-"""
-Trim History Module — Context-Life (CL)
+﻿"""
+Trim History Module ΓÇö Context-Life (CL)
 
 Implements 3 strategies for intelligent message array trimming:
   - tail:  Keep the N most recent messages
   - head:  Keep the N oldest messages
   - smart: Protect system messages + recent context, compress the middle
 
-The smart strategy is the crown jewel — it NEVER touches system messages
+The smart strategy is the crown jewel ΓÇö it NEVER touches system messages
 and intelligently decides what to drop vs. summarize.
 
-RFC-002 P4: analyze_context_health() — Diagnostic tool that provides a
+RFC-002 P4: analyze_context_health() ΓÇö Diagnostic tool that provides a
 "Health Score" (0-100) for the current context window with actionable
 recommendations and orchestrator hints.
 """
@@ -21,7 +21,7 @@ from dataclasses import dataclass, field
 from enum import Enum
 from typing import Optional
 
-from mmcp.token_counter import DEFAULT_ENCODING, count_messages_tokens, count_tokens
+from mmcp.infrastructure.tokens.token_counter import DEFAULT_ENCODING, count_messages_tokens, count_tokens
 
 
 class TrimStrategy(str, Enum):
@@ -289,22 +289,22 @@ def trim_smart(
     summary_prompt: Optional[str] = None,
 ) -> TrimResult:
     """
-    Intelligent trimming strategy — the crown jewel of Context-Life.
+    Intelligent trimming strategy ΓÇö the crown jewel of Context-Life.
 
     Strict Budget Enforcement Ladder:
       1. ALWAYS protect system/developer messages when they fit
       2. Try to protect the last `preserve_recent` non-system messages
       3. Drop ALL middle messages first
-      4. If still over budget → reduce preserve_recent progressively
-      5. If system/developer anchors alone exceed budget → return explicit fallback
-      6. GUARANTEE: output token count ≤ max_tokens
+      4. If still over budget ΓåÆ reduce preserve_recent progressively
+      5. If system/developer anchors alone exceed budget ΓåÆ return explicit fallback
+      6. GUARANTEE: output token count Γëñ max_tokens
 
     Args:
         messages: The full message array
         max_tokens: Token budget ceiling
         preserve_recent: Number of recent non-system messages to protect
         encoding: Tiktoken encoding name
-        summary_prompt: Optional — not used yet, reserved for LLM summarization
+        summary_prompt: Optional ΓÇö not used yet, reserved for LLM summarization
     """
     original_count = count_messages_tokens(messages, encoding)
     diagnostics_extra: dict = {}
@@ -334,7 +334,7 @@ def trim_smart(
         running_suffix_count += 1
         recent_suffix_tokens[index] = running_suffix_single_tokens - (3 * (running_suffix_count - 1))
 
-    # Phase 2: Strict ladder — adjust preserve_recent until it fits
+    # Phase 2: Strict ladder ΓÇö adjust preserve_recent until it fits
     effective_recent = min(preserve_recent, len(non_system))
     middle_end = len(non_system)
 
@@ -356,7 +356,7 @@ def trim_smart(
         if budget_for_middle >= 0:
             break  # This preserve_recent level fits
 
-        # Protected messages alone exceed budget — reduce recent
+        # Protected messages alone exceed budget ΓÇö reduce recent
         effective_recent -= 1
 
     # Phase 3: Fill middle messages (newest first, skip-and-continue)
@@ -410,7 +410,7 @@ def trim_smart(
         result_messages = system_msgs + recent_msgs
         trimmed_count = count_messages_tokens(result_messages, encoding)
 
-    # Strict enforcement pass 3: oversized system anchors — explicit fallback
+    # Strict enforcement pass 3: oversized system anchors ΓÇö explicit fallback
     if trimmed_count > max_tokens and system_msgs:
         result_messages, diagnostics_extra = _build_system_budget_fallback(
             max_tokens=max_tokens,
@@ -437,7 +437,7 @@ def trim_messages(
     encoding: str = DEFAULT_ENCODING,
 ) -> TrimResult:
     """
-    Main entry point — dispatches to the correct strategy.
+    Main entry point ΓÇö dispatches to the correct strategy.
 
     Args:
         messages: OpenAI-style message array
@@ -610,7 +610,7 @@ def analyze_context_health(
                 "total_tokens": 0,
                 "message_count": 0,
             },
-            recommendations=["Context is empty — no optimization needed."],
+            recommendations=["Context is empty ΓÇö no optimization needed."],
             orchestrator_hints={
                 "should_trim_now": False,
                 "suggested_strategy": "smart",
@@ -658,7 +658,7 @@ def analyze_context_health(
     recommendations: list[str] = []
 
     if usage_percent > 90:
-        recommendations.append("⚠️ CRITICAL: Token usage is above 90%. Trim immediately to avoid overflow.")
+        recommendations.append("ΓÜá∩╕Å CRITICAL: Token usage is above 90%. Trim immediately to avoid overflow.")
     elif usage_percent > 75:
         recommendations.append("Token usage is high (>75%). Consider trimming older messages.")
 
@@ -672,12 +672,12 @@ def analyze_context_health(
 
     if noise == "high":
         recommendations.append(
-            "High noise detected — many very short or empty messages. "
+            "High noise detected ΓÇö many very short or empty messages. "
             "These waste token budget with minimal context value."
         )
 
     if not recommendations:
-        recommendations.append("Context is healthy — no immediate action needed.")
+        recommendations.append("Context is healthy ΓÇö no immediate action needed.")
 
     # --- Orchestrator hints ---
     should_trim = usage_percent > 80 or redundancy > 0.2

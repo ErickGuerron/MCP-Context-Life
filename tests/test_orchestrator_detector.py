@@ -15,7 +15,7 @@ from unittest.mock import patch
 
 import pytest
 
-from mmcp.orchestrator_detector import (
+from mmcp.infrastructure.environment.orchestrator_detector import (
     OrchestratorInfo,
     _check_env_vars,
     _check_workspace_artifacts,
@@ -143,8 +143,8 @@ class TestWorkspaceDetection:
             fake_workspace.mkdir()
 
             with (
-                patch("mmcp.orchestrator_detector.Path.home", return_value=fake_home),
-                patch("mmcp.orchestrator_detector.Path.cwd", return_value=fake_workspace),
+                patch("mmcp.infrastructure.environment.orchestrator_detector.Path.home", return_value=fake_home),
+                patch("mmcp.infrastructure.environment.orchestrator_detector.Path.cwd", return_value=fake_workspace),
             ):
                 result = _check_workspace_artifacts()
 
@@ -197,7 +197,7 @@ class TestCachedDetection:
             with tempfile.TemporaryDirectory() as tmp:
                 result1 = detect_orchestrator(cwd=tmp)
                 # Manually set cache
-                from mmcp import orchestrator_detector
+                from mmcp.infrastructure.environment import orchestrator_detector
 
                 orchestrator_detector._cached_result = result1
 
@@ -207,7 +207,7 @@ class TestCachedDetection:
 
     def test_reset_clears_cache(self):
         """reset_detection() should clear the cache."""
-        from mmcp import orchestrator_detector
+        from mmcp.infrastructure.environment import orchestrator_detector
 
         orchestrator_detector._cached_result = OrchestratorInfo(is_detected=True, orchestrator_name="test")
         reset_detection()

@@ -12,7 +12,7 @@ Verifies that:
 
 import pytest
 
-from mmcp.token_counter import (
+from mmcp.infrastructure.tokens.token_counter import (
     _MIN_CACHE_LENGTH,
     _encoder_cache,
     clear_cache,
