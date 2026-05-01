@@ -1,9 +1,8 @@
 import json
-
 from pathlib import Path
 
-from mmcp.presentation.mcp import server
 from mmcp.presentation.app_container import AppContainer
+from mmcp.presentation.mcp import server
 
 
 class FakeKnowledgeStore:

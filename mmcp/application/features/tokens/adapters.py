@@ -1,6 +1,11 @@
 from __future__ import annotations
 
-from mmcp.infrastructure.tokens.token_counter import DEFAULT_ENCODING, count_messages_tokens, count_tokens, get_cache_info
+from mmcp.infrastructure.tokens.token_counter import (
+    DEFAULT_ENCODING,
+    count_messages_tokens,
+    count_tokens,
+    get_cache_info,
+)
 
 
 class TokenCounterAdapter:

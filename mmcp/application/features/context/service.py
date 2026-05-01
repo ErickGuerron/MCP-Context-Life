@@ -3,7 +3,12 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import Optional
 
-from mmcp.infrastructure.context.trim_history import ContextHealthReport, TrimResult, analyze_context_health, trim_messages
+from mmcp.infrastructure.context.trim_history import (
+    ContextHealthReport,
+    TrimResult,
+    analyze_context_health,
+    trim_messages,
+)
 from mmcp.infrastructure.persistence.cache_manager import CacheLoop
 from mmcp.infrastructure.tokens.token_counter import DEFAULT_ENCODING
 

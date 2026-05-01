@@ -18,6 +18,7 @@ from typing import Optional
 
 from mcp.server.fastmcp import FastMCP
 
+from mmcp.infrastructure.context.trim_history import analyze_context_health, trim_messages
 from mmcp.infrastructure.environment.config import get_config, get_rag_warmup_mode_details
 from mmcp.infrastructure.environment.orchestrator_detector import get_orchestrator_info
 from mmcp.infrastructure.knowledge.rag_engine import RAGEngine
@@ -30,7 +31,6 @@ from mmcp.infrastructure.tokens.token_counter import (
     count_tokens,
     get_cache_info,
 )
-from mmcp.infrastructure.context.trim_history import analyze_context_health, trim_messages
 
 # --- Server Instance ---
 mcp = FastMCP(

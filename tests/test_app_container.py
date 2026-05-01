@@ -1,8 +1,8 @@
 import pytest
 
-from mmcp.presentation.mcp import server
-from mmcp.presentation.app_container import AppContainer
 from mmcp.infrastructure.environment.config import get_config
+from mmcp.presentation.app_container import AppContainer
+from mmcp.presentation.mcp import server
 
 
 class FakeRAGEngine:

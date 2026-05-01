@@ -1,9 +1,9 @@
 import json
 
-from mmcp.presentation.app_container import AppContainer
-from mmcp.presentation.mcp import server
 from mmcp.application.features.context.service import ContextService
 from mmcp.infrastructure.context.trim_history import TrimResult, trim_messages
+from mmcp.presentation.app_container import AppContainer
+from mmcp.presentation.mcp import server
 
 
 class FakeCacheLoop:

@@ -1,6 +1,6 @@
-from mmcp.presentation.mcp import server
-from mmcp.presentation import app_container as app_container_module
 from mmcp.infrastructure.environment.config import get_config
+from mmcp.presentation import app_container as app_container_module
+from mmcp.presentation.mcp import server
 
 
 class FakeRAGEngine:

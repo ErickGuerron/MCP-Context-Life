@@ -25,6 +25,7 @@ from mmcp.infrastructure.persistence.cache_manager import CacheLoop
 from mmcp.infrastructure.persistence.session_store import SessionStore
 from mmcp.infrastructure.tokens.token_counter import TokenBudget
 
+
 def _build_mcp() -> FastMCP:
     return FastMCP(
         "Context-Life",

@@ -3,6 +3,8 @@ import time
 from rich.console import Console
 
 import mmcp.presentation.cli.cli as cli
+from mmcp.infrastructure.environment.config import get_config
+from mmcp.infrastructure.persistence.session_store import SessionStore, UsageEvent
 from mmcp.presentation.cli.cli import (
     DetailPage,
     _build_doctor_content,
@@ -25,8 +27,6 @@ from mmcp.presentation.cli.cli import (
     _resolve_detail_layout,
     _set_warmup_mode_and_return,
 )
-from mmcp.infrastructure.environment.config import get_config
-from mmcp.infrastructure.persistence.session_store import SessionStore, UsageEvent
 
 
 def _render_text(renderable) -> str:
