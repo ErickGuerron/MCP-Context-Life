@@ -1,4 +1,5 @@
 import json
+import sys
 
 import mmcp.presentation.cli.cli as cli
 from mmcp.infrastructure.installation.context_life_installer import install_context_life
@@ -35,7 +36,7 @@ def test_install_antigravity_keeps_existing_config(tmp_path):
     assert result.changed is True
     data = json.loads(config_path.read_text(encoding="utf-8"))
     assert set(data["mcpServers"].keys()) == {"existing", "context-life"}
-    assert data["mcpServers"]["context-life"] == {"command": "context-life", "args": []}
+    assert data["mcpServers"]["context-life"] == {"command": sys.executable, "args": ["-m", "mmcp"]}
 
 
 def test_install_vscode_writes_context_life_only(monkeypatch, tmp_path):
@@ -49,8 +50,8 @@ def test_install_vscode_writes_context_life_only(monkeypatch, tmp_path):
     assert set(data["servers"].keys()) == {"context-life"}
     assert data["servers"]["context-life"] == {
         "type": "stdio",
-        "command": "context-life",
-        "args": [],
+        "command": sys.executable,
+        "args": ["-m", "mmcp"],
     }
 
 

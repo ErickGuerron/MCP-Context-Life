@@ -1390,13 +1390,13 @@ def _build_install_menu() -> MenuScreen:
             ),
             MenuItem(
                 "Antigravity",
-                "Writes ~/.gemini/antigravity/mcp_config.json with the context-life MCP entry.",
+                "Writes ~/.gemini/antigravity/mcp_config.json using the current Python interpreter to avoid PATH issues.",
                 lambda: _install_context_life_and_return("antigravity"),
                 keep_tui=True,
             ),
             MenuItem(
                 "Visual Studio Code",
-                "Writes the user mcp.json with the context-life MCP entry.",
+                "Writes the user mcp.json using the current Python interpreter to avoid PATH issues.",
                 lambda: _install_context_life_and_return("vscode"),
                 keep_tui=True,
             ),

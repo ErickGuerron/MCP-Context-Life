@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 import os
 import tempfile
+import sys
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Callable
@@ -30,6 +31,17 @@ def _opencode_path(home: Path) -> Path:
 
 def _antigravity_path(home: Path) -> Path:
     return home / ".gemini" / "antigravity" / "mcp_config.json"
+
+
+def _antigravity_overlay() -> dict[str, Any]:
+    return {
+        "mcpServers": {
+            "context-life": {
+                "command": sys.executable,
+                "args": ["-m", "mmcp"],
+            }
+        }
+    }
 
 
 def _vscode_path(home: Path) -> Path:
@@ -68,14 +80,7 @@ TARGETS: tuple[InstallTarget, ...] = (
         key="antigravity",
         label="Antigravity",
         path_resolver=_antigravity_path,
-        overlay={
-            "mcpServers": {
-                "context-life": {
-                    "command": "context-life",
-                    "args": [],
-                }
-            }
-        },
+        overlay=_antigravity_overlay(),
     ),
     InstallTarget(
         key="vscode",
@@ -85,8 +90,8 @@ TARGETS: tuple[InstallTarget, ...] = (
             "servers": {
                 "context-life": {
                     "type": "stdio",
-                    "command": "context-life",
-                    "args": [],
+                    "command": sys.executable,
+                    "args": ["-m", "mmcp"],
                 }
             }
         },
