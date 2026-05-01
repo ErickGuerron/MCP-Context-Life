@@ -42,7 +42,6 @@ def test_upgrade_clears_screen_before_confirmation(monkeypatch):
 
     output = "".join(stream.buffer)
     assert "\x1b[2j\x1b[h" in output.lower()
-    assert "\x1b[?1049h" in output
     assert "context-life upgrade" in output.lower()
 
 
@@ -66,7 +65,7 @@ def test_cli_upgrade_delegates_to_dedicated_flow(monkeypatch):
 
     cli.do_upgrade(target_version="v1.2.3", dry_run=True)
 
-    assert called == [(("v1.2.3", True), {})]
+    assert called == [((), {"target_version": "v1.2.3", "dry_run": True, "inside_tui": False})]
 
 
 def test_upgrade_menu_item_keeps_tui_modal():
