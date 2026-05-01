@@ -21,6 +21,9 @@ def test_infrastructure_layer_modules_are_visible_and_canonical():
 def test_legacy_root_shim_files_are_removed():
     repo_root = Path(__file__).resolve().parents[1]
     legacy_files = [
+        repo_root / "mmcp" / "app_container.py",
+        repo_root / "mmcp" / "cli.py",
+        repo_root / "mmcp" / "server.py",
         repo_root / "mmcp" / "cache_manager.py",
         repo_root / "mmcp" / "config.py",
         repo_root / "mmcp" / "orchestrator_detector.py",
@@ -38,9 +41,19 @@ def test_legacy_root_shim_files_are_removed():
         repo_root / "mmcp" / "infrastructure" / "token_counter.py",
         repo_root / "mmcp" / "infrastructure" / "trim_history.py",
         repo_root / "mmcp" / "presentation" / "server.py",
+        repo_root / "mmcp" / "presentation" / "__main__.py",
     ]
 
     assert all(not path.exists() for path in legacy_files)
+
+
+def test_package_entrypoint_imports_canonical_presentation_modules():
+    repo_root = Path(__file__).resolve().parents[1]
+    entrypoint_source = (repo_root / "mmcp" / "__main__.py").read_text(encoding="utf-8")
+
+    assert "from mmcp.presentation import __main__ as _impl" not in entrypoint_source
+    assert "from mmcp.presentation.mcp.server import" in entrypoint_source
+    assert "from mmcp.presentation.cli" in entrypoint_source
 
 
 def test_presentation_layer_modules_are_visible_and_canonical():
