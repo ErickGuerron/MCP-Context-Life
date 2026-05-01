@@ -94,7 +94,7 @@ class MenuScreen:
     title: str
     subtitle: str
     items: list[MenuItem]
-    help_text: str = "j/k: navigate • enter: select • esc: back • q: quit"
+    help_text: str = "↑/↓: navigate • →: select • ←: back • q: quit"
     selected: int = 0
     empty_message: str = "No items available."
     content_builder: Callable[[], object] | None = None
@@ -485,10 +485,12 @@ def _detail_body_width() -> int:
 
 def _detail_footer_text(screen: MenuScreen, page_count: int) -> str:
     """Shared detail footer text."""
-    detail_help = ["scroll: j/k ↑/↓"]
+    detail_help = ["↑/↓: scroll"]
     if page_count > 1:
-        detail_help.append("page: ←/→")
-    detail_help.extend(["esc: back", "q: quit"])
+        detail_help.append("→: next page")
+        detail_help.append("←: prev/back")
+        detail_help.append("PgUp/PgDn: page")
+    detail_help.extend(["q: quit"])
     return " • ".join(detail_help)
 
 
@@ -726,7 +728,7 @@ def _build_menu_panel(screen: MenuScreen, path: str, latest_version: str | None 
         body = Panel(
             Group(*rows),
             title=screen.title,
-            subtitle="Use enter to select",
+            subtitle="Use → or enter to select",
             border_style="cyan",
             box=box.ROUNDED,
             width=body_width,
@@ -841,23 +843,30 @@ def _show_stateful_menu(root_screen: MenuScreen):
                     _move_menu_selection(current, -1)
                 paint()
                 continue
-            if key == "right" and (current.content_builder is not None or current.content_pages_builder is not None):
-                _move_detail_page(current, 1, len(_get_detail_pages(current)))
-                paint()
-                continue
-            if key == "left" and (current.content_builder is not None or current.content_pages_builder is not None):
-                _move_detail_page(current, -1, len(_get_detail_pages(current)))
-                paint()
-                continue
+            if current.content_pages_builder is not None:
+                page_count = len(_get_detail_pages(current))
+                if key in ("right", "pgdn") and current.page_index < max(0, page_count - 1):
+                    _move_detail_page(current, 1, page_count)
+                    paint()
+                    continue
+                if key in ("left", "pgup"):
+                    if current.page_index > 0:
+                        _move_detail_page(current, -1, page_count)
+                        paint()
+                        continue
+                    if len(stack) > 1:
+                        stack.pop()
+                        paint()
+                        continue
             if key == "q":
                 break
-            if key == "esc":
+            if key == "left" or key == "esc":
                 if len(stack) == 1:
                     break
                 stack.pop()
                 paint()
                 continue
-            if key != "enter" or not current.items:
+            if key not in ("enter", "right") or not current.items:
                 continue
 
             item = current.items[current.selected]
@@ -911,7 +920,7 @@ def _build_detail_screen(title: str, subtitle: str, content_builder: Callable[[]
         title=title,
         subtitle=subtitle,
         items=[],
-        help_text="esc: back • q: quit",
+        help_text="←: back • q: quit",
         content_builder=content_builder,
     )
 
@@ -924,7 +933,7 @@ def _build_paged_detail_screen(
         title=title,
         subtitle=subtitle,
         items=[],
-        help_text="j/k: scroll • left/right: page • esc: back • q: quit",
+        help_text="↑/↓: scroll • PgUp/PgDn: page • ←: back • q: quit",
         content_pages_builder=content_pages_builder,
     )
 
@@ -1077,12 +1086,12 @@ def _build_main_tui_menu() -> MenuScreen:
     """Top-level stateful TUI menu."""
     return MenuScreen(
         title="Main Menu",
-        subtitle="Pick a section, move with j/k or arrows, and stay inside one consistent menu architecture.",
+        subtitle="Pick a section with ↑/↓ and use →/enter to open, ← to go back.",
         items=[
             MenuItem("Config", "Warmup settings and configurable operational actions.", submenu=_build_config_menu()),
             MenuItem("Metrics", "Info, health, telemetry, and diagnostic resources.", submenu=_build_metrics_menu()),
         ],
-        help_text="j/k: navigate • enter: select • esc: back • q: quit",
+        help_text="↑/↓: navigate • →/enter: select • ←: back • q: quit",
     )
 
 
@@ -2010,3 +2019,43 @@ def _show_in_scrollable_screen(renderable, title: str = "View"):
 def do_tui():
     """Start the full-screen stateful TUI menu."""
     _show_stateful_menu(_build_main_tui_menu())
+
+
+# Re-export split presentation modules so the public CLI surface remains stable.
+from .warmup import (  # noqa: E402
+    _build_config_menu,
+    _build_detail_screen,
+    _build_paged_detail_screen,
+    _build_rag_warmup_summary_panel,
+    _build_rag_warmup_table,
+    _build_warmup_menu,
+    _build_warmup_modes_detail_page,
+    _build_warmup_status_content,
+    _build_warmup_status_detail_page,
+    _build_warmup_status_pages,
+    _current_warmup_mode_label,
+    _prewarm_rag_now_and_return,
+    _render_rag_warmup_interactive_selector,
+    _set_warmup_mode_and_return,
+    _show_saved_warmup_mode,
+    _warmup_modes_lines,
+    _warmup_status_lines,
+    do_rag_warmup_command,
+    prewarm_rag_now_cli,
+    run_rag_warmup_interactive,
+    set_rag_warmup_mode,
+    show_rag_warmup_info,
+)
+from .diagnostics import (  # noqa: E402
+    _build_doctor_content,
+    _build_doctor_pages,
+    _build_info_content,
+    _build_info_pages,
+    _build_metrics_menu,
+    _build_telemetry_content,
+    _build_telemetry_pages,
+    do_doctor,
+    show_info,
+    show_telemetry_dashboard,
+)
+from .upgrade import do_upgrade  # noqa: E402

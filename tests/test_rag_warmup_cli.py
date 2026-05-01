@@ -220,7 +220,86 @@ def test_dense_detail_footer_mentions_left_right_navigation(isolated_data_dir):
 
     text = _render_text(_build_menu_panel(info_screen, "Main Menu  ›  Metrics  ›  Info"))
 
-    assert "page" in text.lower()
+    assert "→: next page" in text.lower()
+    assert "←: prev/back" in text.lower()
+    assert "pgup/pgdn" in text.lower()
+
+
+def test_info_screen_advances_with_right_arrow(monkeypatch):
+    class _FakeStream:
+        def isatty(self):
+            return True
+
+        def write(self, *_args, **_kwargs):
+            return 0
+
+        def flush(self):
+            return None
+
+    info_screen = _build_metrics_menu().items[0].submenu
+    key_sequence = iter(["right", "q"])
+
+    monkeypatch.setattr(cli.sys, "stdin", _FakeStream())
+    monkeypatch.setattr(cli.sys, "stdout", _FakeStream())
+    monkeypatch.setattr(cli, "_read_tui_key", lambda: next(key_sequence))
+    monkeypatch.setattr(cli, "_render_renderable_to_lines", lambda renderable, width: ["x"])
+    monkeypatch.setattr(cli, "_build_menu_panel", lambda screen, path, latest_version=None: "x")
+
+    cli._show_stateful_menu(info_screen)
+
+    assert info_screen.page_index == 1
+
+
+def test_stateful_menu_maps_right_to_enter_and_left_to_back(monkeypatch):
+    paths = []
+
+    class _FakeStream:
+        def isatty(self):
+            return True
+
+        def write(self, *_args, **_kwargs):
+            return 0
+
+        def flush(self):
+            return None
+
+    key_sequence = iter(["right", "q"])
+
+    monkeypatch.setattr(cli.sys, "stdin", _FakeStream())
+    monkeypatch.setattr(cli.sys, "stdout", _FakeStream())
+    monkeypatch.setattr(cli, "_read_tui_key", lambda: next(key_sequence))
+    monkeypatch.setattr(cli, "_build_menu_panel", lambda screen, path, latest_version=None: paths.append(path) or "x")
+    monkeypatch.setattr(cli, "_render_renderable_to_lines", lambda renderable, width: ["x"])
+
+    cli._show_stateful_menu(_build_main_tui_menu())
+
+    assert any(path.endswith("Main Menu  ›  Config") for path in paths)
+
+
+def test_stateful_menu_maps_left_to_escape(monkeypatch):
+    paths = []
+
+    class _FakeStream:
+        def isatty(self):
+            return True
+
+        def write(self, *_args, **_kwargs):
+            return 0
+
+        def flush(self):
+            return None
+
+    key_sequence = iter(["left", "q"])
+
+    monkeypatch.setattr(cli.sys, "stdin", _FakeStream())
+    monkeypatch.setattr(cli.sys, "stdout", _FakeStream())
+    monkeypatch.setattr(cli, "_read_tui_key", lambda: next(key_sequence))
+    monkeypatch.setattr(cli, "_build_menu_panel", lambda screen, path, latest_version=None: paths.append(path) or "x")
+    monkeypatch.setattr(cli, "_render_renderable_to_lines", lambda renderable, width: ["x"])
+
+    cli._show_stateful_menu(_build_warmup_menu())
+
+    assert paths[0].endswith("Config / Warmup")
 
 
 def test_move_detail_page_clamps_and_resets_scroll():
