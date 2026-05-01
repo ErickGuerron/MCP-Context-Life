@@ -71,8 +71,8 @@ def test_cli_upgrade_delegates_to_dedicated_flow(monkeypatch):
 def test_upgrade_menu_item_keeps_tui_modal():
     menu = cli._build_config_menu()
 
-    assert menu.items[1].label == "Upgrade Context-Life"
-    assert menu.items[1].keep_tui is True
+    assert menu.items[2].label == "Upgrade Context-Life"
+    assert menu.items[2].keep_tui is True
 
 
 def test_menu_action_can_keep_tui(monkeypatch):

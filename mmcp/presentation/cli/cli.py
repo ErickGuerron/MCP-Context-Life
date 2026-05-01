@@ -1052,6 +1052,11 @@ def _build_config_menu() -> MenuScreen:
                 inline_value=_current_warmup_mode_label,
             ),
             MenuItem(
+                "Install Context-Life",
+                "Add the context-life MCP entry to OpenCode, Antigravity, or Visual Studio Code.",
+                submenu=_build_install_menu(),
+            ),
+            MenuItem(
                 "Upgrade Context-Life",
                 "Install the latest GitHub release when you are ready.",
                 lambda: do_upgrade(inside_tui=True),
@@ -1351,6 +1356,53 @@ def do_upgrade(target_version: str | None = None, dry_run: bool = False, inside_
     from .upgrade import do_upgrade as _do_upgrade
 
     return _do_upgrade(target_version=target_version, dry_run=dry_run, inside_tui=inside_tui)
+
+
+def _install_context_life_and_return(target_key: str) -> MenuActionResult:
+    from mmcp.infrastructure.installation.context_life_installer import install_context_life
+
+    result = install_context_life(target_key)
+    if result.changed:
+        message = (
+            f"[bold green]✓ Context-Life added to {result.label}.[/]\n"
+            f"[bold]Config:[/] [yellow]{result.path}[/]\n"
+            "[dim]Only the context-life MCP entry was written.[/]"
+        )
+    else:
+        message = (
+            f"[bold cyan]ℹ Context-Life is already configured in {result.label}.[/]\n"
+            f"[bold]Config:[/] [yellow]{result.path}[/]"
+        )
+    return MenuActionResult(back_levels=1, notice=message)
+
+
+def _build_install_menu() -> MenuScreen:
+    """Submenu for adding Context-Life to supported tools."""
+    return MenuScreen(
+        title="Config / Install",
+        subtitle="Add only the Context-Life MCP entry to a supported client.",
+        items=[
+            MenuItem(
+                "OpenCode",
+                "Writes ~/.config/opencode/opencode.json with the context-life MCP entry.",
+                lambda: _install_context_life_and_return("opencode"),
+                keep_tui=True,
+            ),
+            MenuItem(
+                "Antigravity",
+                "Writes ~/.gemini/antigravity/mcp_config.json with the context-life MCP entry.",
+                lambda: _install_context_life_and_return("antigravity"),
+                keep_tui=True,
+            ),
+            MenuItem(
+                "Visual Studio Code",
+                "Writes the user mcp.json with the context-life MCP entry.",
+                lambda: _install_context_life_and_return("vscode"),
+                keep_tui=True,
+            ),
+        ],
+        help_text="←: back • q: quit",
+    )
 
 
 def _build_doctor_content():

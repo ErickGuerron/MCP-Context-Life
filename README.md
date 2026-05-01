@@ -139,6 +139,16 @@ Add to `~/.config/opencode/opencode.json`:
 }
 ```
 
+### Install from the TUI
+
+Open `context-life tui`, go to **Config → Install Context-Life**, and choose one of:
+
+- **OpenCode**
+- **Antigravity**
+- **Visual Studio Code**
+
+Each option adds only the `context-life` MCP entry to that tool’s config.
+
 ### Claude Desktop
 
 Edit `claude_desktop_config.json`:
