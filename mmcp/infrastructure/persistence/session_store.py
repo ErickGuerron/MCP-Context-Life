@@ -1,4 +1,4 @@
-﻿"""
+"""
 Session Store Module ΓÇö Context-Life (CL)
 
 Provides SQLite-backed persistence for cache metadata and usage telemetry.

@@ -1,4 +1,4 @@
-﻿"""
+"""
 Orchestrator Detector Module ΓÇö Context-Life (CL)
 
 RFC-002 P3: Auto-detects when CL is running alongside an AI orchestrator

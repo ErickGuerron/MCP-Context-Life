@@ -1,4 +1,4 @@
-﻿"""
+"""
 Context-Life (CL) ΓÇö LLM Context Optimization MCP Server
 
 The main MCP server that exposes all context optimization tools:
@@ -31,6 +31,9 @@ from mmcp.infrastructure.tokens.token_counter import (
     count_tokens,
     get_cache_info,
 )
+from mmcp.presentation.app_container import AppContainer
+
+APP_CONTAINER = AppContainer()
 
 # --- Server Instance ---
 mcp = FastMCP(

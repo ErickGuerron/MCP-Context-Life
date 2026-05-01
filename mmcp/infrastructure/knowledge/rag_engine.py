@@ -1,4 +1,4 @@
-﻿"""
+"""
 RAG Engine Module ΓÇö Context-Life (CL)
 
 Local Retrieval-Augmented Generation using:

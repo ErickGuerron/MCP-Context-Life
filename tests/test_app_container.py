@@ -1,5 +1,3 @@
-import pytest
-
 from mmcp.infrastructure.environment.config import get_config
 from mmcp.presentation.app_container import AppContainer
 from mmcp.presentation.mcp import server
@@ -48,9 +46,7 @@ def test_container_reuses_token_budget_until_config_changes(isolated_data_dir):
     assert first.max_tokens == get_config().token_budget_default
 
 
-def test_container_prefers_local_token_budget_class_over_server_compatibility_override(
-    monkeypatch, isolated_data_dir
-):
+def test_container_prefers_local_token_budget_class_over_server_compatibility_override(monkeypatch, isolated_data_dir):
     from mmcp.presentation import app_container as app_container_module
 
     monkeypatch.setattr(app_container_module, "TokenBudget", LocalTokenBudget)

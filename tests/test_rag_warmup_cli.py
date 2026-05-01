@@ -394,13 +394,10 @@ def test_paged_info_view_uses_single_main_container_and_internal_dividers(monkey
 
     try:
         info_screen = _build_metrics_menu().items[0].submenu
-        layout = _resolve_detail_layout(info_screen, "Main Menu  ›  Metrics  ›  Info")
-        lines = layout["page_lines"]
         rendered_lines = _render_lines(_build_menu_panel(info_screen, "Main Menu  ›  Metrics  ›  Info"), width=76)
     finally:
         monkeypatch.setattr(cli, "CONSOLE", original_console)
 
-    joined = "\n".join(lines).lower()
     rendered_joined = "\n".join(rendered_lines).lower()
 
     assert len(rendered_lines) > 0

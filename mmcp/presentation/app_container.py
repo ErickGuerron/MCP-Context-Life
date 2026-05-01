@@ -1,4 +1,4 @@
-﻿"""
+"""
 Application container for Context-Life (CL).
 
 Owns the shared runtime objects behind the MCP server so the server module
@@ -211,4 +211,3 @@ class AppContainer:
         self._knowledge_service_config_key = None
         self._telemetry_service_config_key = None
         self._runtime_initialized_key = None
-

@@ -1,4 +1,4 @@
-﻿"""
+"""
 Token Counter Module ΓÇö Context-Life (CL)
 
 Provides fast, accurate token counting using tiktoken.

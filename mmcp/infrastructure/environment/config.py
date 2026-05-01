@@ -1,4 +1,4 @@
-﻿"""
+"""
 Config Module ΓÇö Context-Life (CL)
 
 Runtime configuration layer with three-tier resolution:

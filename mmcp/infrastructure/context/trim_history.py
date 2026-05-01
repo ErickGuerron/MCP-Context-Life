@@ -1,4 +1,4 @@
-﻿"""
+"""
 Trim History Module ΓÇö Context-Life (CL)
 
 Implements 3 strategies for intelligent message array trimming:

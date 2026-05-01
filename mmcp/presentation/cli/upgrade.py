@@ -81,7 +81,7 @@ def _build_failure_panel(old_version: str, target_label: str, install_target: st
         f"[bold]Target:[/] [green]{target_label}[/]\n\n"
         "[bold]Recommended:[/] install uv first, then retry with uv tool.\n"
         "[bold]Step 1:[/] python -m pip install uv\n"
-        f"[bold]Step 2:[/] uv tool install --force \"{install_target}\"\n\n"
+        f'[bold]Step 2:[/] uv tool install --force "{install_target}"\n\n'
         "[dim]Enter: try again • Esc/q: cancel[/]"
     )
     if stderr_text:
@@ -118,7 +118,7 @@ def do_upgrade(target_version: str | None = None, dry_run: bool = False, inside_
 
         if dry_run:
             CONSOLE.print(f"\n  [bold cyan]ℹ Dry run:[/] would install [green]{target_label}[/]")
-            CONSOLE.print(f"  [dim]uv tool install --force \"{install_target}\"[/]\n")
+            CONSOLE.print(f'  [dim]uv tool install --force "{install_target}"[/]\n')
             return
 
         if _wait_for_key() in {"esc", "q"}:

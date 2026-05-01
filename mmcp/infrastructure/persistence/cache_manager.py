@@ -1,4 +1,4 @@
-﻿"""
+"""
 Cache Manager Module ΓÇö Context-Life (CL)
 
 Implements context caching strategies to leverage provider-level
@@ -27,6 +27,7 @@ import time
 from dataclasses import dataclass, field
 from typing import Optional
 
+from mmcp.application.ports.session_store import PrefixCacheStorePort
 from mmcp.infrastructure.environment.config import get_config
 from mmcp.infrastructure.environment.orchestrator_detector import get_orchestrator_info
 from mmcp.infrastructure.persistence.session_store import SessionStore

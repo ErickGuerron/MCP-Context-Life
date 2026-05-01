@@ -65,7 +65,19 @@ class FakeRAGEngine:
         return {"status": "indexed", "indexed": 1, "skipped": 0, "errors": 0, "files": []}
 
     def search(self, query, top_k=5, max_tokens=0, min_score=0.0, max_chunks_per_source=0):
-        return [type("Result", (), {"to_dict": lambda self: {"text": "hit", "source": "doc.md", "score": 0.1, "chunk_index": 0}})()]
+        result_type = type(
+            "Result",
+            (),
+            {
+                "to_dict": lambda self: {
+                    "text": "hit",
+                    "source": "doc.md",
+                    "score": 0.1,
+                    "chunk_index": 0,
+                }
+            },
+        )
+        return [result_type()]
 
     def stats(self):
         return {"table": "knowledge", "total_chunks": 1, "unique_files": 1, "model_loaded": self._model_loaded}
@@ -169,7 +181,10 @@ def test_server_knowledge_tools_delegate_to_service(monkeypatch, tmp_path):
     doc.write_text("hello")
 
     assert server.index_knowledge(str(doc)) == '{"status": "indexed"}'
-    assert server.search_context("query") == '{"query": "query", "results_count": 1, "results": [{"text": "hit", "source": "doc.md", "score": 0.1, "chunk_index": 0}]}'
+    assert server.search_context("query") == (
+        '{"query": "query", "results_count": 1, "results": ['
+        '{"text": "hit", "source": "doc.md", "score": 0.1, "chunk_index": 0}]}'
+    )
     assert json.loads(server.prewarm_rag())["status"] == "ready"
     assert server.rag_stats() == '{"total_chunks": 0}'
     assert server.clear_knowledge() == '{"status": "cleared"}'

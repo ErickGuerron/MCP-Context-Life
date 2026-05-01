@@ -32,7 +32,7 @@ def test_cache_store_uses_injected_session_store_for_lookup_hit():
     session_store.lookup_result = (42, 3)
     store = CacheStore(max_entries=10, session_store=session_store)
 
-    is_cached, content_hash = store.lookup("[{\"role\": \"system\", \"content\": \"Base\"}]")
+    is_cached, content_hash = store.lookup('[{"role": "system", "content": "Base"}]')
 
     assert is_cached is True
     assert len(content_hash) == 16
@@ -45,7 +45,7 @@ def test_cache_store_uses_injected_session_store_for_store_and_eviction():
     session_store = FakePrefixCacheStore()
     store = CacheStore(max_entries=5, session_store=session_store)
 
-    content_hash = store.store("[{\"role\": \"system\", \"content\": \"Base\"}]", 42)
+    content_hash = store.store('[{"role": "system", "content": "Base"}]', 42)
 
     assert len(content_hash) == 16
     assert session_store.store_calls == [(content_hash, 42)]
