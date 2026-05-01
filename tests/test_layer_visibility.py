@@ -1,5 +1,6 @@
 from pathlib import Path
 
+
 def _module_folder_name(module) -> str:
     return Path(module.__file__).parent.name
 
@@ -59,10 +60,10 @@ def test_package_entrypoint_imports_canonical_presentation_modules():
 def test_presentation_layer_modules_are_visible_and_canonical():
     import mmcp.presentation.app_container as presentation_app_container
     import mmcp.presentation.cli as presentation_cli
-    import mmcp.presentation.cli.cli as presentation_cli_impl
+    import mmcp.presentation.cli.upgrade as presentation_upgrade_impl
     import mmcp.presentation.mcp.server as presentation_server_impl
 
     assert _module_folder_name(presentation_app_container) == "presentation"
     assert _module_folder_name(presentation_cli) == "cli"
-    assert presentation_cli.do_upgrade is presentation_cli_impl.do_upgrade
+    assert presentation_cli.do_upgrade is presentation_upgrade_impl.do_upgrade
     assert presentation_server_impl.mcp is not None

@@ -1,4 +1,4 @@
-﻿"""
+"""
 Context-Life (CL) — CLI Module
 
 Beautiful terminal interface using Rich for:
@@ -85,6 +85,7 @@ class MenuItem:
     action: Callable[[], object] | None = None
     submenu: MenuScreen | None = None
     inline_value: Callable[[], str] | None = None
+    keep_tui: bool = False
 
 
 @dataclass(slots=True)
@@ -343,9 +344,9 @@ def _warmup_modes_lines() -> list[str]:
         lines.extend(
             [
                 f"[bold]{label}[/]",
-        f"startup → {info['startup_impact']}",
-        f"first use → {info['first_use_impact']}",
-        f"resources → {info['resource_impact']}",
+                f"startup → {info['startup_impact']}",
+                f"first use → {info['first_use_impact']}",
+                f"resources → {info['resource_impact']}",
                 "",
             ]
         )
@@ -761,8 +762,12 @@ def _run_menu_action(
     exit_alt_screen: str,
     enter_alt_screen: str,
     hide_cursor: str,
+    keep_tui: bool = False,
 ) -> MenuActionResult | None:
     """Temporarily leave the menu screen, run an action, then return."""
+    if keep_tui:
+        return action()
+
     write(show_cursor + exit_alt_screen)
     flush()
     try:
@@ -878,7 +883,14 @@ def _show_stateful_menu(root_screen: MenuScreen):
 
             if item.action is not None:
                 result = _run_menu_action(
-                    item.action, write, flush, show_cursor, exit_alt_screen, enter_alt_screen, hide_cursor
+                    item.action,
+                    write,
+                    flush,
+                    show_cursor,
+                    exit_alt_screen,
+                    enter_alt_screen,
+                    hide_cursor,
+                    item.keep_tui,
                 )
                 if result is not None:
                     _invalidate_screen_cache(stack[0])
@@ -1040,7 +1052,12 @@ def _build_config_menu() -> MenuScreen:
                 submenu=_build_warmup_menu(),
                 inline_value=_current_warmup_mode_label,
             ),
-            MenuItem("Upgrade Context-Life", "Install the latest GitHub release when you are ready.", do_upgrade),
+            MenuItem(
+                "Upgrade Context-Life",
+                "Install the latest GitHub release when you are ready.",
+                lambda: do_upgrade(inside_tui=True),
+                keep_tui=True,
+            ),
         ],
     )
 
@@ -1330,69 +1347,11 @@ def show_info():
     _show_in_scrollable_screen(content, title="System Info")
 
 
-def do_upgrade(target_version: str | None = None, dry_run: bool = False):
-    """Self-update from GitHub releases (not HEAD)."""
-    print_banner()
+def do_upgrade(target_version: str | None = None, dry_run: bool = False, inside_tui: bool = False):
+    """Compatibility wrapper for the dedicated upgrade flow."""
+    from .upgrade import do_upgrade as _do_upgrade
 
-    old_version = get_version()
-
-    # Resolve target version
-    if target_version:
-        tag = target_version.lstrip("v")
-        release_url = f"https://github.com/{GITHUB_REPO}/releases/tag/v{tag}"
-    else:
-        with CONSOLE.status("[bold cyan]Checking for latest release...[/]", spinner="dots"):
-            tag, release_url = _fetch_latest_release()
-
-    if not tag:
-        CONSOLE.print("\n  [bold yellow]⚠ Could not fetch release info from GitHub[/]")
-        CONSOLE.print("  [dim]Falling back to latest from repository...[/]\n")
-        tag = None
-        install_target = f"git+{REPO_URL}"
-    else:
-        install_target = f"git+{REPO_URL}@v{tag}"
-
-    CONSOLE.print(
-        Align.center(
-            Panel(
-                f"[bold]Current version:[/] [yellow]v{old_version}[/]\n"
-                f"[bold]Target version:[/]  [green]v{tag or 'latest'}[/]"
-                + (f"\n[dim]{release_url}[/]" if release_url else ""),
-                title="🔄 Context-Life Upgrade",
-                border_style="yellow",
-                box=box.ROUNDED,
-            )
-        )
-    )
-
-    if tag and tag == old_version:
-        CONSOLE.print(f"\n  [bold green]✓ Already up to date[/] [dim](v{old_version})[/]\n")
-        return
-
-    if dry_run:
-        CONSOLE.print(f"\n  [bold cyan]ℹ Dry run:[/] would install [green]v{tag or 'latest'}[/]")
-        CONSOLE.print(f"  [dim]pip install --upgrade {install_target}[/]\n")
-        return
-
-    with CONSOLE.status("[bold cyan]Downloading and installing...[/]", spinner="dots"):
-        result = subprocess.run(
-            [sys.executable, "-m", "pip", "install", "--upgrade", install_target],
-            capture_output=True,
-            text=True,
-        )
-
-    if result.returncode == 0:
-        new_version = get_version()
-        if new_version != old_version:
-            CONSOLE.print(f"\n  [bold green]✓ Upgraded![/] [yellow]v{old_version}[/] → [green]v{new_version}[/]\n")
-        else:
-            CONSOLE.print(f"\n  [bold green]✓ Already up to date[/] [dim](v{new_version})[/]\n")
-        for line in result.stdout.strip().split("\n")[-5:]:
-            CONSOLE.print(f"  [dim]{line}[/]")
-    else:
-        CONSOLE.print("\n  [bold red]✗ Upgrade failed[/]\n")
-        CONSOLE.print(f"  [red]{result.stderr.strip()[:500]}[/]")
-        sys.exit(1)
+    return _do_upgrade(target_version=target_version, dry_run=dry_run, inside_tui=inside_tui)
 
 
 def _build_doctor_content():
@@ -2019,43 +1978,3 @@ def _show_in_scrollable_screen(renderable, title: str = "View"):
 def do_tui():
     """Start the full-screen stateful TUI menu."""
     _show_stateful_menu(_build_main_tui_menu())
-
-
-# Re-export split presentation modules so the public CLI surface remains stable.
-from .warmup import (  # noqa: E402
-    _build_config_menu,
-    _build_detail_screen,
-    _build_paged_detail_screen,
-    _build_rag_warmup_summary_panel,
-    _build_rag_warmup_table,
-    _build_warmup_menu,
-    _build_warmup_modes_detail_page,
-    _build_warmup_status_content,
-    _build_warmup_status_detail_page,
-    _build_warmup_status_pages,
-    _current_warmup_mode_label,
-    _prewarm_rag_now_and_return,
-    _render_rag_warmup_interactive_selector,
-    _set_warmup_mode_and_return,
-    _show_saved_warmup_mode,
-    _warmup_modes_lines,
-    _warmup_status_lines,
-    do_rag_warmup_command,
-    prewarm_rag_now_cli,
-    run_rag_warmup_interactive,
-    set_rag_warmup_mode,
-    show_rag_warmup_info,
-)
-from .diagnostics import (  # noqa: E402
-    _build_doctor_content,
-    _build_doctor_pages,
-    _build_info_content,
-    _build_info_pages,
-    _build_metrics_menu,
-    _build_telemetry_content,
-    _build_telemetry_pages,
-    do_doctor,
-    show_info,
-    show_telemetry_dashboard,
-)
-from .upgrade import do_upgrade  # noqa: E402

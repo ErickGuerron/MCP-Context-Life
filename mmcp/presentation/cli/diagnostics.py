@@ -144,7 +144,9 @@ def _build_info_pages() -> list[DetailPage]:
                         "🖥 System",
                         [
                             f"[bold]Version:[/] v{get_version()}",
-                            f"[bold]Python:[/] {sys.version_info.major}.{sys.version_info.minor}.{sys.version_info.micro}",
+                            f"[bold]Python:[/] {sys.version_info.major}."
+                            f"{sys.version_info.minor}."
+                            f"{sys.version_info.micro}",
                             f"[bold]OS:[/] {platform.system()}",
                             f"[bold]Arch:[/] {platform.machine()}",
                         ],
@@ -204,7 +206,9 @@ def _build_doctor_content():
 
     cfg_path = _default_config_path()
     cfg_exists = cfg_path.exists()
-    checks.append(("Config file", "✅" if cfg_exists else "ℹ️", f"{cfg_path}" + (" (using defaults)" if not cfg_exists else "")))
+    checks.append(
+        ("Config file", "✅" if cfg_exists else "ℹ️", f"{cfg_path}" + (" (using defaults)" if not cfg_exists else ""))
+    )
 
     cfg = get_config()
     data_dir = cfg.resolve_data_dir()
@@ -212,7 +216,9 @@ def _build_doctor_content():
 
     rag_path = Path(cfg.resolve_rag_db_path())
     rag_writable = os.access(rag_path.parent, os.W_OK) if rag_path.parent.exists() else False
-    checks.append(("LanceDB path", "✅" if rag_writable else "⚠️", f"{rag_path}" + (" (not writable)" if not rag_writable else "")))
+    checks.append(
+        ("LanceDB path", "✅" if rag_writable else "⚠️", f"{rag_path}" + (" (not writable)" if not rag_writable else ""))
+    )
 
     warmup = get_rag_warmup_mode_details(cfg.rag_warmup_mode)
     checks.append(("RAG warmup mode", "✅", f"{cfg.rag_warmup_mode} — {warmup['current']['startup_impact']}"))
@@ -221,7 +227,13 @@ def _build_doctor_content():
     if os.name == "nt":
         model_cache = Path(os.environ.get("USERPROFILE", Path.home())) / ".cache" / "huggingface"
     cache_exists = model_cache.exists()
-    checks.append(("Model cache", "✅" if cache_exists else "ℹ️", f"{model_cache}" + (" (will download on first use)" if not cache_exists else "")))
+    checks.append(
+        (
+            "Model cache",
+            "✅" if cache_exists else "ℹ️",
+            f"{model_cache}" + (" (will download on first use)" if not cache_exists else ""),
+        )
+    )
 
     try:
         latest_tag, _ = _fetch_latest_release()
@@ -230,7 +242,13 @@ def _build_doctor_content():
 
     if latest_tag:
         is_latest = latest_tag == ver
-        checks.append(("Latest release", "✅" if is_latest else "⬆️", f"v{latest_tag}" + ("" if is_latest else f" (you have v{ver})")))
+        checks.append(
+            (
+                "Latest release",
+                "✅" if is_latest else "⬆️",
+                f"v{latest_tag}" + ("" if is_latest else f" (you have v{ver})"),
+            )
+        )
     else:
         checks.append(("Latest release", "⚠️", "Could not reach GitHub API"))
 
@@ -299,7 +317,9 @@ def _build_doctor_pages() -> list[DetailPage]:
 
     cfg_path = _default_config_path()
     cfg_exists = cfg_path.exists()
-    checks.append(("Config file", "✅" if cfg_exists else "ℹ️", f"{cfg_path}" + (" (using defaults)" if not cfg_exists else "")))
+    checks.append(
+        ("Config file", "✅" if cfg_exists else "ℹ️", f"{cfg_path}" + (" (using defaults)" if not cfg_exists else ""))
+    )
 
     cfg = get_config()
     data_dir = cfg.resolve_data_dir()
@@ -307,7 +327,9 @@ def _build_doctor_pages() -> list[DetailPage]:
 
     rag_path = Path(cfg.resolve_rag_db_path())
     rag_writable = os.access(rag_path.parent, os.W_OK) if rag_path.parent.exists() else False
-    checks.append(("LanceDB path", "✅" if rag_writable else "⚠️", f"{rag_path}" + (" (not writable)" if not rag_writable else "")))
+    checks.append(
+        ("LanceDB path", "✅" if rag_writable else "⚠️", f"{rag_path}" + (" (not writable)" if not rag_writable else ""))
+    )
 
     warmup = get_rag_warmup_mode_details(cfg.rag_warmup_mode)
     checks.append(("RAG warmup mode", "✅", f"{cfg.rag_warmup_mode} — {warmup['current']['startup_impact']}"))
@@ -316,7 +338,13 @@ def _build_doctor_pages() -> list[DetailPage]:
     if os.name == "nt":
         model_cache = Path(os.environ.get("USERPROFILE", Path.home())) / ".cache" / "huggingface"
     cache_exists = model_cache.exists()
-    checks.append(("Model cache", "✅" if cache_exists else "ℹ️", f"{model_cache}" + (" (will download on first use)" if not cache_exists else "")))
+    checks.append(
+        (
+            "Model cache",
+            "✅" if cache_exists else "ℹ️",
+            f"{model_cache}" + (" (will download on first use)" if not cache_exists else ""),
+        )
+    )
 
     try:
         latest_tag, _ = _fetch_latest_release()
@@ -325,7 +353,13 @@ def _build_doctor_pages() -> list[DetailPage]:
 
     if latest_tag:
         is_latest = latest_tag == ver
-        checks.append(("Latest release", "✅" if is_latest else "⬆️", f"v{latest_tag}" + ("" if is_latest else f" (you have v{ver})")))
+        checks.append(
+            (
+                "Latest release",
+                "✅" if is_latest else "⬆️",
+                f"v{latest_tag}" + ("" if is_latest else f" (you have v{ver})"),
+            )
+        )
     else:
         checks.append(("Latest release", "⚠️", "Could not reach GitHub API"))
 
@@ -343,7 +377,16 @@ def _build_doctor_pages() -> list[DetailPage]:
         DetailPage(
             title="Summary",
             renderable_builder=lambda width: _build_linear_detail_sections(
-                [("Health Summary", ["[bold red]Some checks failed.[/] Fix the red items and run again." if has_errors else "[bold green]All checks passed.[/] Context-Life is ready to use."])],
+                [
+                    (
+                        "Health Summary",
+                        [
+                            "[bold red]Some checks failed.[/] Fix the red items and run again."
+                            if has_errors
+                            else "[bold green]All checks passed.[/] Context-Life is ready to use."
+                        ],
+                    )
+                ],
                 width,
             ),
         ),
@@ -351,7 +394,10 @@ def _build_doctor_pages() -> list[DetailPage]:
         DetailPage(
             title="Checks",
             renderable_builder=lambda width: _build_linear_detail_sections(
-                [("Runtime", _lines_for(runtime_checks)), ("Dependencies", _lines_for(dependency_checks))],
+                [
+                    ("Runtime", _lines_for(runtime_checks)),
+                    ("Dependencies", _lines_for(dependency_checks)),
+                ],
                 width,
             ),
         ),
@@ -407,7 +453,8 @@ def _build_telemetry_content():
             transformed = data["output_tokens"]
             saved = data["saved_tokens"]
             usage_lines.append(
-                f"[bold]{model_name}[/] — input {format_big_number(used)} • output {format_big_number(transformed)} • saved {format_big_number(saved)}"
+                f"[bold]{model_name}[/] — input {format_big_number(used)} • "
+                f"output {format_big_number(transformed)} • saved {format_big_number(saved)}"
             )
         if len(sorted_models) > 6:
             usage_lines.append(f"[dim]+ {len(sorted_models) - 6} more model(s) not shown[/]")
@@ -425,7 +472,11 @@ def _build_telemetry_content():
         ),
         _compact_panel(
             "📅 Budget reference",
-            [("Window", "Rolling 7 days"), ("Default request budget", format_big_number(budget)), ("Tracked models", str(len(weekly)))],
+            [
+                ("Window", "Rolling 7 days"),
+                ("Default request budget", format_big_number(budget)),
+                ("Tracked models", str(len(weekly))),
+            ],
             border_style="blue",
         ),
         _compact_list_panel("Model usage", usage_lines, border_style="cyan"),
@@ -467,7 +518,8 @@ def _build_telemetry_pages() -> list[DetailPage]:
             transformed = data["output_tokens"]
             saved = data["saved_tokens"]
             usage_lines.append(
-                f"[bold]{model_name}[/] — input {format_big_number(used)} • output {format_big_number(transformed)} • saved {format_big_number(saved)}"
+                f"[bold]{model_name}[/] — input {format_big_number(used)} • "
+                f"output {format_big_number(transformed)} • saved {format_big_number(saved)}"
             )
 
     return [
@@ -486,7 +538,11 @@ def _build_telemetry_pages() -> list[DetailPage]:
                 ),
                 _compact_panel(
                     "📅 Budget reference",
-                    [("Window", "Rolling 7 days"), ("Default request budget", format_big_number(budget)), ("Tracked models", str(len(weekly)))],
+                    [
+                        ("Window", "Rolling 7 days"),
+                        ("Default request budget", format_big_number(budget)),
+                        ("Tracked models", str(len(weekly))),
+                    ],
                     border_style="blue",
                 ),
             ),
@@ -519,8 +575,28 @@ def _build_metrics_menu() -> MenuScreen:
         title="Metrics",
         subtitle="Status, diagnostics, and runtime visibility for the current environment.",
         items=[
-            MenuItem("Info", "System, config, dependencies, tools, and resources overview.", submenu=_build_paged_detail_screen("Info", "Compact system pages with horizontal navigation for dense sections.", _build_info_pages)),
-            MenuItem("Health", "Environment diagnostics and readiness checks.", submenu=_build_paged_detail_screen("Health", "Readiness checks grouped into compact horizontally navigable pages.", _build_doctor_pages)),
-            MenuItem("Telemetry", "Weekly usage, savings, and budget tracking dashboard.", submenu=_build_detail_screen("Telemetry", "Scrollable telemetry dashboard with summary and model usage kept together.", _build_telemetry_content)),
+            MenuItem(
+                "Info",
+                "System, config, dependencies, tools, and resources overview.",
+                submenu=_build_paged_detail_screen(
+                    "Info", "Compact system pages with horizontal navigation for dense sections.", _build_info_pages
+                ),
+            ),
+            MenuItem(
+                "Health",
+                "Environment diagnostics and readiness checks.",
+                submenu=_build_paged_detail_screen(
+                    "Health", "Readiness checks grouped into compact horizontally navigable pages.", _build_doctor_pages
+                ),
+            ),
+            MenuItem(
+                "Telemetry",
+                "Weekly usage, savings, and budget tracking dashboard.",
+                submenu=_build_detail_screen(
+                    "Telemetry",
+                    "Scrollable telemetry dashboard with summary and model usage kept together.",
+                    _build_telemetry_content,
+                ),
+            ),
         ],
     )

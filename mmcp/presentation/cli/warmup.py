@@ -6,26 +6,15 @@ from rich.panel import Panel
 from rich.text import Text
 
 from .cli import (
-    CONSOLE,
     DetailPage,
     MenuActionResult,
     MenuItem,
     MenuScreen,
     _build_linear_detail_sections,
-    _build_menu_panel,
-    _compact_panel,
-    _compact_list_panel,
-    _detail_section_lines,
-    _move_detail_page,
-    _move_detail_scroll,
-    _move_menu_selection,
-    _get_detail_pages,
-    _invalidate_screen_cache,
-    _resolve_detail_layout,
-    _stack_renderables,
     _show_in_scrollable_screen,
-    _show_stateful_menu,
+    _stack_renderables,
 )
+
 
 def _build_rag_warmup_summary_panel():
     from mmcp.infrastructure.environment.config import get_config, get_rag_warmup_mode_details
@@ -94,13 +83,15 @@ def _warmup_modes_lines() -> list[str]:
         label = f"[bold green]{info['label']}[/]" if mode == details["current_mode"] else info["label"]
         if mode == details["current_mode"]:
             label = f"{label} [dim](current)[/]"
-        lines.extend([
-            f"[bold]{label}[/]",
-            f"startup → {info['startup_impact']}",
-            f"first use → {info['first_use_impact']}",
-            f"resources → {info['resource_impact']}",
-            "",
-        ])
+        lines.extend(
+            [
+                f"[bold]{label}[/]",
+                f"startup → {info['startup_impact']}",
+                f"first use → {info['first_use_impact']}",
+                f"resources → {info['resource_impact']}",
+                "",
+            ]
+        )
     while lines and lines[-1] == "":
         lines.pop()
     return lines
@@ -130,7 +121,9 @@ def _build_warmup_status_pages() -> list[DetailPage]:
 
 
 def _build_detail_screen(title: str, subtitle: str, content_builder):
-    return MenuScreen(title=title, subtitle=subtitle, items=[], help_text="←: back • q: quit", content_builder=content_builder)
+    return MenuScreen(
+        title=title, subtitle=subtitle, items=[], help_text="←: back • q: quit", content_builder=content_builder
+    )
 
 
 def _build_paged_detail_screen(title: str, subtitle: str, content_pages_builder):
@@ -203,7 +196,11 @@ def _build_warmup_menu() -> MenuScreen:
                     _build_warmup_status_pages,
                 ),
             ),
-            MenuItem("Set Lazy", "Fast startup; first RAG action pays the warmup cost.", lambda: _set_warmup_mode_and_return("lazy")),
+            MenuItem(
+                "Set Lazy",
+                "Fast startup; first RAG action pays the warmup cost.",
+                lambda: _set_warmup_mode_and_return("lazy"),
+            ),
             MenuItem(
                 "Set Startup",
                 "Load the embedding model during MCP startup for fastest first RAG use.",
@@ -214,7 +211,11 @@ def _build_warmup_menu() -> MenuScreen:
                 "Keep full control and prewarm explicitly only when you decide.",
                 lambda: _set_warmup_mode_and_return("manual"),
             ),
-            MenuItem("Prewarm now", "Load the model immediately without changing the saved mode.", _prewarm_rag_now_and_return),
+            MenuItem(
+                "Prewarm now",
+                "Load the model immediately without changing the saved mode.",
+                _prewarm_rag_now_and_return,
+            ),
         ],
     )
 
@@ -238,10 +239,11 @@ def _build_config_menu() -> MenuScreen:
 
 
 def prewarm_rag_now_cli():
+    import mmcp.presentation.cli.cli as cli_module
     from mmcp.presentation.mcp.server import prewarm_rag_now
 
     result = prewarm_rag_now()
-    CONSOLE.print(
+    cli_module.CONSOLE.print(
         Panel(
             f"[bold]Mode:[/] [green]{result['mode']}[/]\n"
             f"[bold]Already loaded:[/] {'yes' if result['already_loaded'] else 'no'}\n"
