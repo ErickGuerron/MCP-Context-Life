@@ -31,8 +31,9 @@ def _build_mcp() -> FastMCP:
         "Context-Life",
         instructions=(
             "Context-Life (CL) â€” LLM context optimization server. "
-            "Use these tools to count tokens, trim message history, "
-            "search indexed knowledge via RAG, and optimize context caching."
+            "Use preflight_request first when a raw user prompt arrives, then call "
+            "intercept_user_request, trim message history, search indexed knowledge via RAG, "
+            "and optimize context caching."
         ),
     )
 

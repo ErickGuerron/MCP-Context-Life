@@ -48,11 +48,12 @@ def _build_info_content():
 
     tool_lines = [
         "[bold]tokens[/] — count_tokens_tool, count_messages_tokens_tool",
-        "[bold]history[/] — optimize_messages",
+        "[bold]history[/] — intercept_user_request, optimize_messages",
         "[bold]rag[/] — search_context, index_knowledge, rag_stats, clear_knowledge",
         "[bold]runtime[/] — prewarm_rag, cache_context, reset_token_budget",
         "[bold]advice[/] — get_orchestration_advice",
     ]
+    prompt_lines = ["[bold]preflight[/] — preflight_request"]
     resource_lines = [
         "[bold]status://token_budget[/] — token budget consumption",
         "[bold]cache://status[/] — cache hit/miss stats",
@@ -88,6 +89,7 @@ def _build_info_content():
         _build_rag_warmup_summary_panel(),
         _compact_list_panel("📦 Dependencies", dependency_lines, border_style="green"),
         _compact_list_panel("⚡ Tools", tool_lines, border_style="magenta"),
+        _compact_list_panel("🧭 Prompts", prompt_lines, border_style="cyan"),
         _compact_list_panel("📊 Resources", resource_lines, border_style="yellow"),
         _compact_list_panel(
             "🔌 Integration",
@@ -121,11 +123,12 @@ def _build_info_pages() -> list[DetailPage]:
 
     tool_lines = [
         "[bold]tokens[/] — count_tokens_tool, count_messages_tokens_tool",
-        "[bold]history[/] — optimize_messages",
+        "[bold]history[/] — intercept_user_request, optimize_messages",
         "[bold]rag[/] — search_context, index_knowledge, rag_stats, clear_knowledge",
         "[bold]runtime[/] — prewarm_rag, cache_context, reset_token_budget",
         "[bold]advice[/] — get_orchestration_advice",
     ]
+    prompt_lines = ["[bold]preflight[/] — preflight_request"]
     resource_lines = [
         "[bold]status://token_budget[/] — token budget consumption",
         "[bold]cache://status[/] — cache hit/miss stats",
@@ -170,7 +173,12 @@ def _build_info_pages() -> list[DetailPage]:
         DetailPage(
             title="Runtime Surface",
             renderable_builder=lambda width: _build_linear_detail_sections(
-                [("📦 Dependencies", dependency_lines), ("⚡ Tools", tool_lines), ("📊 Resources", resource_lines)],
+                [
+                    ("📦 Dependencies", dependency_lines),
+                    ("⚡ Tools", tool_lines),
+                    ("🧭 Prompts", prompt_lines),
+                    ("📊 Resources", resource_lines),
+                ],
                 width,
             ),
         ),

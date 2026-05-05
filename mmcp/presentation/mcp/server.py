@@ -14,6 +14,8 @@ The main MCP server that exposes all context optimization tools:
 from __future__ import annotations
 
 import json
+import re
+from collections import Counter
 from typing import Optional
 
 from mcp.server.fastmcp import FastMCP
@@ -40,8 +42,9 @@ mcp = FastMCP(
     "Context-Life",
     instructions=(
         "Context-Life (CL) ΓÇö LLM context optimization server. "
-        "Use these tools to count tokens, trim message history, "
-        "search indexed knowledge via RAG, and optimize context caching."
+        "Use preflight_request first when a raw user prompt arrives, then call "
+        "intercept_user_request, trim message history, search indexed knowledge via RAG, "
+        "and optimize context caching."
     ),
 )
 
@@ -189,6 +192,127 @@ def reset_runtime_state() -> None:
     _rag_engine_config_key = None
     _cache_loop_config_key = None
     _runtime_initialized_key = None
+
+
+_REQUEST_STOPWORDS = {
+    "a",
+    "about",
+    "and",
+    "de",
+    "del",
+    "el",
+    "en",
+    "es",
+    "for",
+    "la",
+    "las",
+    "los",
+    "me",
+    "mi",
+    "no",
+    "para",
+    "por",
+    "que",
+    "quiero",
+    "se",
+    "si",
+    "the",
+    "to",
+    "un",
+    "una",
+    "y",
+}
+
+_REQUEST_OPTIMIZATION_TERMS = {
+    "context",
+    "contexto",
+    "token",
+    "tokens",
+    "trim",
+    "cache",
+    "caching",
+    "prompt",
+    "rag",
+    "health",
+    "memoria",
+    "optimizar",
+    "optimization",
+    "optimize",
+}
+
+_REQUEST_BUILD_TERMS = {
+    "build",
+    "create",
+    "crear",
+    "dashboard",
+    "panel",
+    "interactivo",
+    "interactive",
+    "ui",
+    "frontend",
+    "backend",
+    "app",
+    "aplicacion",
+    "report",
+    "chart",
+    "gráfico",
+    "graficos",
+    "analytics",
+    "ganancias",
+    "deuda",
+    "ingresos",
+}
+
+_REQUEST_DEBUG_TERMS = {
+    "error",
+    "bug",
+    "falla",
+    "broken",
+    "crash",
+    "exception",
+    "no funciona",
+}
+
+
+def _normalize_request_text(text: str) -> str:
+    return " ".join(text.split())
+
+
+def _extract_request_keywords(text: str, limit: int = 8) -> list[str]:
+    tokens = re.findall(r"[\wÁÉÍÓÚÜÑáéíóúüñ]+", text.lower())
+    counts = Counter(token for token in tokens if len(token) > 2 and token not in _REQUEST_STOPWORDS)
+    return [token for token, _ in counts.most_common(limit)]
+
+
+def _classify_request_intent(text: str) -> str:
+    lowered = text.lower()
+    if any(term in lowered for term in _REQUEST_OPTIMIZATION_TERMS):
+        return "context_optimization"
+    if any(term in lowered for term in _REQUEST_DEBUG_TERMS):
+        return "debugging"
+    if any(term in lowered for term in _REQUEST_BUILD_TERMS):
+        return "feature_request"
+    return "general_request"
+
+
+def _build_request_flow(intent: str, advice: dict, keywords: list[str]) -> list[str]:
+    if intent == "context_optimization":
+        flow = ["normalize_request", "analyze_context_health_tool"]
+        flow.append(advice.get("recommended_next_tool", "get_orchestration_advice"))
+        if advice.get("should_snapshot_context"):
+            flow.append("cache_context")
+        return flow
+
+    if intent == "feature_request":
+        flow = ["normalize_request", "search_context", "optimize_messages", "cache_context"]
+        if keywords:
+            flow[1] = f"search_context:{' '.join(keywords[:5])}"
+        return flow
+
+    if intent == "debugging":
+        return ["normalize_request", "search_context", "analyze_context_health_tool"]
+
+    return ["normalize_request", advice.get("recommended_next_tool", "get_orchestration_advice")]
 
 
 # ============================================================
@@ -583,6 +707,132 @@ def get_orchestration_advice(
     return json.dumps(result)
 
 
+@mcp.tool()
+@track_telemetry("intercept_user_request")
+def intercept_user_request(
+    request: str,
+    max_tokens: int = 8_000,
+    encoding: str = DEFAULT_ENCODING,
+) -> str:
+    """
+    Normalize a raw user request into an optimized routing payload.
+
+    This is the first-step tool for clients that want to prepare a request
+    before planning, RAG lookup, or context optimization. MCP cannot
+    transparently intercept chat traffic by itself, so callers should invoke
+    this tool explicitly as the first step.
+    """
+    normalized_request = _normalize_request_text(request)
+    keywords = _extract_request_keywords(normalized_request)
+    intent = _classify_request_intent(normalized_request)
+
+    synthetic_messages = [
+        {"role": "system", "content": "Context-Life request interceptor."},
+        {"role": "user", "content": normalized_request},
+    ]
+    report = analyze_context_health(synthetic_messages, max_tokens, encoding)
+    health = report.to_dict()
+
+    metrics = report.metrics
+    total_tokens = metrics.get("total_tokens", 0)
+    usage_percent = metrics.get("token_usage_percent", 0.0)
+    redundancy = metrics.get("redundancy_ratio", 0.0)
+    estimated_savings = max(0, int(total_tokens * max(redundancy, usage_percent / 100 * 0.2)))
+
+    if intent == "context_optimization":
+        recommended_next_tool = (
+            "optimize_messages" if report.orchestrator_hints.get("should_trim_now") else "get_orchestration_advice"
+        )
+        urgency = "high" if usage_percent >= 90 else "medium"
+        reason = (
+            "The request is already about context optimization, so the next step is to "
+            "inspect or trim the active conversation."
+        )
+    elif intent == "feature_request":
+        recommended_next_tool = "search_context"
+        urgency = "medium"
+        reason = (
+            "This is a build request, so the server should normalize it and look for project context "
+            "before planning work."
+        )
+    elif intent == "debugging":
+        recommended_next_tool = "analyze_context_health_tool"
+        urgency = "medium"
+        reason = (
+            "This looks like a troubleshooting request; start by measuring context pressure and then "
+            "search for related code or notes."
+        )
+    else:
+        recommended_next_tool = "get_orchestration_advice"
+        urgency = "low"
+        reason = "The request is generic, so the best first step is to gather orchestration advice."
+
+    if intent == "feature_request":
+        search_query = " ".join(keywords[:6]) or normalized_request
+    else:
+        search_query = normalized_request
+
+    advice = {
+        "recommended_next_tool": recommended_next_tool,
+        "urgency": urgency,
+        "reason": reason,
+        "suggested_strategy": report.orchestrator_hints.get("suggested_strategy", "smart"),
+        "should_trim_now": report.orchestrator_hints.get("should_trim_now", False),
+        "estimated_savings_tokens": estimated_savings,
+        "safe_to_index": usage_percent < 85,
+        "should_snapshot_context": usage_percent >= 75 or redundancy >= 0.2,
+    }
+
+    result = {
+        "original_request": request,
+        "normalized_request": normalized_request,
+        "intent": intent,
+        "keywords": keywords,
+        "search_query": search_query,
+        "health": health,
+        "advice": advice,
+        "applied_process": _build_request_flow(intent, advice, keywords),
+        "note": (
+            "MCP servers cannot silently intercept client chat; use this tool as the first step "
+            "to route the request."
+        ),
+    }
+    return json.dumps(result)
+
+
+@mcp.prompt(
+    name="preflight_request",
+    title="Context-Life Preflight",
+    description="Cheap request normalization and routing before planning, trim, cache, or RAG work.",
+)
+def preflight_request(request: str) -> list[dict[str, str]]:
+    """Return a prompt template that primes the client to run the router first."""
+    normalized_request = _normalize_request_text(request)
+    intent = _classify_request_intent(normalized_request)
+    keywords = _extract_request_keywords(normalized_request)
+
+    keyword_text = ", ".join(keywords) if keywords else "none"
+    return [
+        {
+            "role": "system",
+            "content": (
+                "You are Context-Life's preflight router. Before planning or answering, call "
+                "intercept_user_request with the raw user prompt, then follow the returned "
+                "applied_process. Keep the decision local and cheap."
+            ),
+        },
+        {
+            "role": "user",
+            "content": (
+                f"Request: {normalized_request}\n"
+                f"Intent guess: {intent}\n"
+                f"Keywords: {keyword_text}\n"
+                "Action: run Context-Life preflight first."
+            ),
+        },
+    ]
+
+
 # ============================================================
 # RESOURCES
 # ============================================================
@@ -641,6 +891,8 @@ def orchestration_resource() -> str:
             "capabilities": {
                 "count_tokens": "count_tokens_tool",
                 "count_messages": "count_messages_tokens_tool",
+                "preflight_prompt": "preflight_request",
+                "intercept": "intercept_user_request",
                 "trim": "optimize_messages",
                 "cache": "cache_context",
                 "health": "analyze_context_health_tool",
@@ -649,6 +901,8 @@ def orchestration_resource() -> str:
                 "rag_index": "index_knowledge",
             },
             "recommended_flow": [
+                "preflight_request",
+                "intercept_user_request",
                 "count_messages_tokens_tool",
                 "analyze_context_health_tool",
                 "get_orchestration_advice",
@@ -661,6 +915,11 @@ def orchestration_resource() -> str:
                     "Use get_orchestration_advice before expensive turns to decide "
                     "whether to trim, cache, or snapshot context."
                 ),
+                (
+                    "Use intercept_user_request as the first explicit step when a client wants "
+                    "request routing and normalization."
+                ),
+                "If the client supports MCP prompts, start the session with preflight_request for the cheapest routing path.",
             ],
         }
     )
