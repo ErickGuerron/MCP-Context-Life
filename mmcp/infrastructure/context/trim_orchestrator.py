@@ -16,7 +16,6 @@ from mmcp.infrastructure.context.trim_strategies.head_strategy import HeadTrimSt
 from mmcp.infrastructure.context.trim_strategies.smart_strategy import SmartTrimStrategyAdapter
 from mmcp.infrastructure.context.trim_strategies.tail_strategy import TailTrimStrategyAdapter
 
-
 _STRATEGIES: dict[str, TrimStrategyPort] = {
     "tail": TailTrimStrategyAdapter,
     "head": HeadTrimStrategyAdapter,

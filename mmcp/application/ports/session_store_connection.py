@@ -2,10 +2,8 @@
 
 from __future__ import annotations
 
-from pathlib import Path
-from typing import Optional, Protocol
-
 import sqlite3
+from typing import Protocol
 
 
 class SessionStoreConnectionPort(Protocol):

@@ -353,17 +353,14 @@ class CacheLoop:
         self._last_static_hash = content_hash
         self._last_base_hash = base_hash
 
-        # P1: Real token savings tracking
+        # P1: Real token savings tracking — compute delta for this call
+        tokens_saved_this_call = 0
         if full_cache_hit:
+            tokens_saved_this_call = static_token_count
             self._store.stats.tokens_saved += static_token_count
         elif base_cache_hit:
-            # Partial reuse — base prompt was cached even though RAG changed
+            tokens_saved_this_call = base_token_count
             self._store.stats.tokens_saved += base_token_count
-
-        # Phase 7: P2 — Return CLEAN messages, NO internal metadata injected
-        optimized_messages = static_messages + dynamic_messages
-
-        total_token_count = count_tokens(json.dumps(optimized_messages, sort_keys=True), self._encoding)
 
         result = {
             "messages": optimized_messages,
@@ -380,6 +377,8 @@ class CacheLoop:
                 "rag_prefix_tokens": rag_token_count,
                 "static_prefix_tokens": static_token_count,
                 "total_tokens": total_token_count,
+                "uncached_input_tokens": total_token_count,
+                "cached_input_tokens": tokens_saved_this_call,
                 "rag_cache_bypass_active": rag_control["bypass_active"],
                 "rag_change_streak": rag_control["change_streak"],
                 "rag_thrash_threshold": self._rag_thrash_threshold,
@@ -387,6 +386,7 @@ class CacheLoop:
                     "base-only" if rag_control["bypass_active"] and rag_hash is not None else "full-prefix"
                 ),
             },
+            "tokens_saved_this_call": tokens_saved_this_call,
             "stats": self._store.get_stats(),
         }
 

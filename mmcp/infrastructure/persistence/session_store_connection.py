@@ -2,10 +2,9 @@
 
 from __future__ import annotations
 
+import sqlite3
 from pathlib import Path
 from typing import Optional
-
-import sqlite3
 
 from mmcp.application.ports.session_store_connection import SessionStoreConnectionPort
 from mmcp.infrastructure.environment.config import get_config

@@ -22,7 +22,7 @@ from mmcp.application.features.tokens.service import TokenBudgetService
 from mmcp.infrastructure.environment.config import get_config, get_rag_warmup_mode_details
 from mmcp.infrastructure.knowledge.rag_engine import RAGEngine
 from mmcp.infrastructure.persistence.cache_manager import CacheLoop
-from mmcp.infrastructure.persistence.session_store import SessionStore
+from mmcp.infrastructure.persistence.session_store import SessionStore  # noqa: F401 (test fixture injection point)
 from mmcp.infrastructure.persistence.session_store_connection import SessionStoreConnection
 from mmcp.infrastructure.persistence.session_store_queries import SessionStoreQueries
 from mmcp.infrastructure.tokens.token_counter import TokenBudget

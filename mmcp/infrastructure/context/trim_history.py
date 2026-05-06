@@ -448,6 +448,7 @@ def trim_messages(
     """
     # Use TrimOrchestrator for strategy dispatch
     from mmcp.infrastructure.context.trim_orchestrator import trim_messages_orchestrated
+
     return trim_messages_orchestrated(messages, max_tokens, strategy, preserve_recent, encoding)
 
 

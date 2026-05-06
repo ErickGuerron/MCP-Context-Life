@@ -1394,7 +1394,10 @@ def _build_install_menu() -> MenuScreen:
             ),
             MenuItem(
                 "Antigravity",
-                "Writes ~/.gemini/antigravity/mcp_config.json using the current Python interpreter to avoid PATH issues.",
+                (
+                    "Writes ~/.gemini/antigravity/mcp_config.json "
+                    "using the current Python interpreter to avoid PATH issues."
+                ),
                 lambda: _install_context_life_and_return("antigravity"),
                 keep_tui=True,
             ),

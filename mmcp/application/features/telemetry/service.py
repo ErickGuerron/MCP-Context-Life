@@ -6,8 +6,8 @@ import time
 from dataclasses import dataclass
 from typing import Any
 
-from mmcp.domain.models import UsageEvent
 from mmcp.application.ports.telemetry_store import TelemetryStorePort
+from mmcp.domain.models import UsageEvent
 from mmcp.infrastructure.environment.orchestrator_detector import OrchestratorInfo
 
 

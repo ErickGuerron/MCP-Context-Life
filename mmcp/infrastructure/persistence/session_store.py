@@ -15,7 +15,6 @@ for backward compatibility.
 from __future__ import annotations
 
 import time
-from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Optional
 
@@ -116,23 +115,4 @@ class SessionStore:
 
 
 # Re-export all public names for backward compatibility
-__all__ = [
-    "SessionStore",
-    "UsageEvent",
-    "lookup_prefix",
-    "record_usage",
-    "get_weekly_usage",
-    "get_all_time_usage",
-    "get_all_time_stats",
-    "get_session_events",
-    "get_active_sessions",
-    "record_cache_hit",
-    "record_cache_miss",
-    "get_cache_stats",
-    "cleanup_expired_sessions",
-    "record_prefix_hit",
-    "store_prefix",
-    "evict_old_prefixes",
-    "clear",
-    "get_recent_stats",
-]
+__all__ = ["SessionStore", "UsageEvent"]

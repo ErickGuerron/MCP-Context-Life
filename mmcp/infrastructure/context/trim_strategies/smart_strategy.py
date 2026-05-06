@@ -16,7 +16,8 @@ from mmcp.application.ports.trim_strategy import TrimStrategyPort
 from mmcp.infrastructure.context.trim_history import (
     DEFAULT_ENCODING,
     TrimResult,
-    TrimStrategy,
+)
+from mmcp.infrastructure.context.trim_history import (
     trim_smart as original_trim_smart,
 )
 

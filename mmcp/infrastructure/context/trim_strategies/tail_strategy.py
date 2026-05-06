@@ -11,8 +11,8 @@ from mmcp.application.ports.trim_strategy import TrimStrategyPort
 from mmcp.infrastructure.context.trim_history import (
     DEFAULT_ENCODING,
     TrimResult,
-    TrimStrategy,
-    count_messages_tokens,
+)
+from mmcp.infrastructure.context.trim_history import (
     trim_tail as original_trim_tail,
 )
 

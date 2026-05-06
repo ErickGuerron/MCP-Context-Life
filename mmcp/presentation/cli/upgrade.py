@@ -8,7 +8,9 @@ from rich import box
 from rich.align import Align
 from rich.panel import Panel
 
-from .cli import CONSOLE, GITHUB_REPO, REPO_URL, _fetch_latest_release, _read_tui_key, get_version
+from .cli import CONSOLE, GITHUB_REPO, REPO_URL, _fetch_latest_release
+from .ui.input import _read_tui_key
+from .ui.render import get_version
 
 
 def _clear_screen() -> None:

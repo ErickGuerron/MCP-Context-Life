@@ -16,7 +16,6 @@ import json
 import os
 import time
 from functools import wraps
-from pathlib import Path
 from typing import Any, Callable, Optional
 
 from mmcp.application.ports.telemetry_store import TelemetryStorePort
@@ -85,7 +84,9 @@ def _coerce_int(value: Any, default: int = 0) -> int:
 def _normalize_model_name(model_name: str | None) -> str:
     """Normalize telemetry model names from env hints."""
     value = (model_name or "").strip()
-    return value or "unknown"
+    if not value or value.lower() in ("unknown", "clipboard", "none", ""):
+        return "unknown"
+    return value
 
 
 def _infer_provider_from_model(model_name: str) -> str:
@@ -204,7 +205,8 @@ def _extract_usage_metrics(payload: Any) -> dict[str, int]:
     diagnostics = _lookup("diagnostics")
     if isinstance(diagnostics, dict):
         usage["input_tokens"] = _coerce_int(diagnostics.get("original_tokens"), usage["input_tokens"])
-        usage["output_tokens"] = _coerce_int(diagnostics.get("trimmed_tokens"), usage["output_tokens"])
+        # output_tokens for trim = 0 (no LLM call involved, saved is reduction not generation)
+        usage["output_tokens"] = 0
         usage["effective_saved_tokens"] = _coerce_int(diagnostics.get("tokens_saved"))
         usage["uncached_input_tokens"] = usage["input_tokens"]
         return usage
@@ -214,17 +216,28 @@ def _extract_usage_metrics(payload: Any) -> dict[str, int]:
         total_tokens = _coerce_int(cache_metadata.get("total_tokens"))
         static_prefix_tokens = _coerce_int(cache_metadata.get("static_prefix_tokens"))
         base_prefix_tokens = _coerce_int(cache_metadata.get("base_prefix_tokens"))
-        usage["input_tokens"] = total_tokens
-        usage["output_tokens"] = total_tokens
-
-        if cache_metadata.get("is_cache_hit"):
-            usage["cached_input_tokens"] = static_prefix_tokens
-        elif cache_metadata.get("is_base_cache_hit"):
-            usage["cached_input_tokens"] = base_prefix_tokens
-
-        usage["effective_saved_tokens"] = usage["cached_input_tokens"]
-        usage["uncached_input_tokens"] = max(0, total_tokens - usage["cached_input_tokens"])
+        is_cache_hit = cache_metadata.get("is_cache_hit", False)
+        is_base_cache_hit = cache_metadata.get("is_base_cache_hit", False)
+        uncached = _coerce_int(cache_metadata.get("uncached_input_tokens"))
+        cached = _coerce_int(cache_metadata.get("cached_input_tokens"))
+        if is_cache_hit:
+            cached = cached if cached else static_prefix_tokens
+            uncached = uncached if uncached else total_tokens - cached
+        elif is_base_cache_hit:
+            cached = cached if cached else base_prefix_tokens
+            uncached = uncached if uncached else total_tokens - cached
+        else:
+            uncached = uncached if uncached else total_tokens - (cached or 0)
+        usage["input_tokens"] = uncached
+        usage["uncached_input_tokens"] = uncached
+        usage["cached_input_tokens"] = cached
+        usage["effective_saved_tokens"] = cached
         return usage
+
+    # Top-level tokens_saved_this_call from cache_context
+    saved_this_call = _coerce_int(payload.get("tokens_saved_this_call"))
+    if saved_this_call > 0:
+        usage["effective_saved_tokens"] = saved_this_call
 
     nested_health_total = _first_int(("metrics", "total_tokens"), ("health", "metrics", "total_tokens"))
     if nested_health_total:
@@ -257,6 +270,7 @@ def _telemetry_log_usage(event: UsageEvent) -> None:
         svc._store.record_usage(event)
     except Exception as e:
         import logging
+
         logging.error(f"Failed to record telemetry: {e}")
 
 

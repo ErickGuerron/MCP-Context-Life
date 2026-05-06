@@ -793,8 +793,7 @@ def intercept_user_request(
         "advice": advice,
         "applied_process": _build_request_flow(intent, advice, keywords),
         "note": (
-            "MCP servers cannot silently intercept client chat; use this tool as the first step "
-            "to route the request."
+            "MCP servers cannot silently intercept client chat; use this tool as the first step to route the request."
         ),
     }
     return json.dumps(result)
@@ -919,7 +918,8 @@ def orchestration_resource() -> str:
                     "Use intercept_user_request as the first explicit step when a client wants "
                     "request routing and normalization."
                 ),
-                "If the client supports MCP prompts, start the session with preflight_request for the cheapest routing path.",
+                "If the client supports MCP prompts, start the session with "
+                "preflight_request for the cheapest routing path.",
             ],
         }
     )

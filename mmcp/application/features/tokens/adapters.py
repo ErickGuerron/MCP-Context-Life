@@ -2,7 +2,6 @@ from __future__ import annotations
 
 from mmcp.infrastructure.tokens.openai_token_counting import OpenAITokenCountingAdapter
 
-
 # Concrete adapter instance used by TokenBudgetService via TokenCounterPort
 _token_counting_adapter = OpenAITokenCountingAdapter()
 

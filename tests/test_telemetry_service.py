@@ -59,7 +59,7 @@ def test_process_telemetry_event_uses_trim_diagnostics(monkeypatch):
     assert event.provider_name == "openai"
     assert event.model_name == "gpt-5.4"
     assert event.input_tokens == 1200
-    assert event.output_tokens == 700
+    assert event.output_tokens == 0  # trim doesn't generate output, it reduces input
     assert event.effective_saved_tokens == 500
     assert event.uncached_input_tokens == 1200
 
@@ -95,8 +95,8 @@ def test_process_telemetry_event_uses_cache_metadata_for_saved_tokens(monkeypatc
     event = captured["event"]
     assert event.provider_name == "opencode"
     assert event.model_name == "opencode/unknown"
-    assert event.input_tokens == 900
-    assert event.output_tokens == 900
+    assert event.input_tokens == 720
+    assert event.output_tokens == 0  # cache_context doesn't generate output tokens
     assert event.cached_input_tokens == 180
     assert event.uncached_input_tokens == 720
     assert event.effective_saved_tokens == 180
