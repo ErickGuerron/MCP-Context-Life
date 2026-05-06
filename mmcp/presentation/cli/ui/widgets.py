@@ -81,12 +81,22 @@ def _build_rag_warmup_summary_panel():
 
     details = get_rag_warmup_mode_details(get_config().rag_warmup_mode)
     current = details["current"]
+
+    notice_lines = ""
+    if details["current_mode"] == "lazy":
+        notice_lines = (
+            "\n\n[yellow on black]⚠ Cold-start delay:[/] First RAG call may take ~12-30s "
+            "because the embedding model loads on demand.\n"
+            "[dim]→ Run [bold]`context-life warmup set startup`[/] to eliminate this delay.[/]"
+        )
+
     return Panel(
         f"[bold]Current mode:[/] [green]{details['current_mode']}[/]\n"
         f"[bold]Startup:[/] {current['startup_impact']}\n"
         f"[bold]First RAG use:[/] {current['first_use_impact']}\n"
         f"[bold]Resources:[/] {current['resource_impact']}\n\n"
-        "[dim]Persist it with `context-life warmup set <lazy|startup|manual>` or trigger `context-life prewarm`.[/]",
+        "[dim]Persist it with `context-life warmup set <lazy|startup|manual>` or trigger `context-life prewarm`.[/]"
+        f"{notice_lines}",
         title="RAG Warmup Status",
         border_style="red",
         box=box.ROUNDED,
@@ -108,13 +118,23 @@ def _warmup_status_lines() -> list[str]:
 
     details = get_rag_warmup_mode_details(get_config().rag_warmup_mode)
     current = details["current"]
-    return [
+    lines = [
         f"[bold]Current mode:[/] [green]{details['current_mode']}[/]",
         f"[bold]Startup:[/] {current['startup_impact']}",
         f"[bold]First RAG use:[/] {current['first_use_impact']}",
         f"[bold]Resources:[/] {current['resource_impact']}",
         "[dim]Persist it with `context-life warmup set <lazy|startup|manual>` or trigger `context-life prewarm`.[/]",
     ]
+    if details["current_mode"] == "lazy":
+        lines.extend(
+            [
+                "",
+                "[yellow on black]⚠ Cold-start delay:[/] First RAG call may take ~12-30s "
+                "because the embedding model loads on demand.",
+                "[dim]→ Run [bold]`context-life warmup set startup`[/] to eliminate this delay.[/]",
+            ]
+        )
+    return lines
 
 
 def _warmup_modes_lines() -> list[str]:

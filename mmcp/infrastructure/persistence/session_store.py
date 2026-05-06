@@ -1,5 +1,5 @@
 """
-SessionStore Facade ΓÇö Context-Life (CL)
+SessionStore Facade - Context-Life (CL)
 
 Provides SQLite-backed persistence for cache metadata and usage telemetry.
 Wires together 4 focused components:

@@ -1,5 +1,5 @@
 """
-Context-Life (CL) ΓÇö LLM Context Optimization MCP Server
+Context-Life (CL) - LLM Context Optimization MCP Server
 
 The main MCP server that exposes all context optimization tools:
   - count_tokens: Count tokens in text or message arrays
@@ -41,7 +41,7 @@ APP_CONTAINER = AppContainer()
 mcp = FastMCP(
     "Context-Life",
     instructions=(
-        "Context-Life (CL) ΓÇö LLM context optimization server. "
+        "Context-Life (CL) - LLM context optimization server. "
         "Use preflight_request first when a raw user prompt arrives, then call "
         "intercept_user_request, trim message history, search indexed knowledge via RAG, "
         "and optimize context caching."

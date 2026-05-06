@@ -363,7 +363,7 @@ class CacheLoop:
             self._store.stats.tokens_saved += base_token_count
 
         result = {
-            "messages": optimized_messages,
+            "messages": dynamic_messages,
             "cache_metadata": {
                 "static_prefix_hash": content_hash,
                 "base_prefix_hash": base_hash,
@@ -376,8 +376,8 @@ class CacheLoop:
                 "base_prefix_tokens": base_token_count,
                 "rag_prefix_tokens": rag_token_count,
                 "static_prefix_tokens": static_token_count,
-                "total_tokens": total_token_count,
-                "uncached_input_tokens": total_token_count,
+                "total_tokens": static_token_count,
+                "uncached_input_tokens": static_token_count,
                 "cached_input_tokens": tokens_saved_this_call,
                 "rag_cache_bypass_active": rag_control["bypass_active"],
                 "rag_change_streak": rag_control["change_streak"],
@@ -394,8 +394,8 @@ class CacheLoop:
         orchestrator = get_orchestrator_info()
         if orchestrator.advisor_mode:
             # Compute advisor hints based on token usage patterns
-            dynamic_token_count = total_token_count - static_token_count
-            dynamic_ratio = round(dynamic_token_count / max(1, total_token_count), 2)
+            dynamic_token_count = static_token_count - static_token_count
+            dynamic_ratio = round(dynamic_token_count / max(1, static_token_count), 2)
 
             result["advisor_hints"] = {
                 "orchestrator": orchestrator.orchestrator_name,

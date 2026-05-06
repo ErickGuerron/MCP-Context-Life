@@ -277,81 +277,30 @@ def print_banner():
 
 def _build_rag_warmup_table():
     """Build a compact warmup comparison panel."""
-    from mmcp.infrastructure.environment.config import get_config, get_rag_warmup_mode_details
+    from .ui.widgets import _build_rag_warmup_table as _build_table
 
-    details = get_rag_warmup_mode_details(get_config().rag_warmup_mode)
-    lines: list[str] = []
-    for mode in ("lazy", "startup", "manual"):
-        info = details["modes"][mode]
-        label = f"[bold green]{info['label']}[/]" if mode == details["current_mode"] else info["label"]
-        if mode == details["current_mode"]:
-            label = f"{label} [dim](current)[/]"
-        lines.append(
-            f"[bold]{label}[/]\n"
-            f"  startup → {info['startup_impact']}\n"
-            f"  first use → {info['first_use_impact']}\n"
-            f"  resources → {info['resource_impact']}"
-        )
-
-    return Panel("\n\n".join(lines), title="RAG Warmup Modes", border_style="red", box=box.ROUNDED, padding=(0, 1))
+    return _build_table()
 
 
 def _build_rag_warmup_summary_panel():
     """Current warmup mode summary panel."""
-    from mmcp.infrastructure.environment.config import get_config, get_rag_warmup_mode_details
+    from .ui.widgets import _build_rag_warmup_summary_panel as _build_panel
 
-    details = get_rag_warmup_mode_details(get_config().rag_warmup_mode)
-    current = details["current"]
-    return Panel(
-        f"[bold]Current mode:[/] [green]{details['current_mode']}[/]\n"
-        f"[bold]Startup:[/] {current['startup_impact']}\n"
-        f"[bold]First RAG use:[/] {current['first_use_impact']}\n"
-        f"[bold]Resources:[/] {current['resource_impact']}\n\n"
-        "[dim]Persist it with `context-life warmup set <lazy|startup|manual>` or trigger `context-life prewarm`.[/]",
-        title="RAG Warmup Status",
-        border_style="red",
-        box=box.ROUNDED,
-    )
+    return _build_panel()
 
 
 def _warmup_status_lines() -> list[str]:
     """Linear warmup summary lines for single-container detail pages."""
-    from mmcp.infrastructure.environment.config import get_config, get_rag_warmup_mode_details
+    from .ui.widgets import _warmup_status_lines as _get_lines
 
-    details = get_rag_warmup_mode_details(get_config().rag_warmup_mode)
-    current = details["current"]
-    return [
-        f"[bold]Current mode:[/] [green]{details['current_mode']}[/]",
-        f"[bold]Startup:[/] {current['startup_impact']}",
-        f"[bold]First RAG use:[/] {current['first_use_impact']}",
-        f"[bold]Resources:[/] {current['resource_impact']}",
-        "[dim]Persist it with `context-life warmup set <lazy|startup|manual>` or trigger `context-life prewarm`.[/]",
-    ]
+    return _get_lines()
 
 
 def _warmup_modes_lines() -> list[str]:
     """Linear warmup comparison lines for single-container detail pages."""
-    from mmcp.infrastructure.environment.config import get_config, get_rag_warmup_mode_details
+    from .ui.widgets import _warmup_modes_lines as _get_lines
 
-    details = get_rag_warmup_mode_details(get_config().rag_warmup_mode)
-    lines: list[str] = []
-    for mode in ("lazy", "startup", "manual"):
-        info = details["modes"][mode]
-        label = f"[bold green]{info['label']}[/]" if mode == details["current_mode"] else info["label"]
-        if mode == details["current_mode"]:
-            label = f"{label} [dim](current)[/]"
-        lines.extend(
-            [
-                f"[bold]{label}[/]",
-                f"startup → {info['startup_impact']}",
-                f"first use → {info['first_use_impact']}",
-                f"resources → {info['resource_impact']}",
-                "",
-            ]
-        )
-    while lines and lines[-1] == "":
-        lines.pop()
-    return lines
+    return _get_lines()
 
 
 def _build_warmup_status_detail_page(width: int):
