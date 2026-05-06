@@ -2,7 +2,7 @@ from pathlib import Path
 
 import pytest
 
-from mmcp.infrastructure.environment.config import get_config, reset_config
+from mmcp.infrastructure.environment.config import get_config, reset_config, reset_telemetry_service
 
 
 @pytest.fixture(autouse=True)
@@ -12,6 +12,7 @@ def isolated_data_dir(tmp_path: Path):
     so that we don't pollute the real production session.db or LanceDB.
     """
     reset_config()
+    reset_telemetry_service()
     cfg = get_config()
 
     # Isolate data directory

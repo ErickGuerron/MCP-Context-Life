@@ -1,5 +1,5 @@
 """
-Telemetry Service Module ΓÇö Context-Life (CL)
+Telemetry Service Module — Context-Life (CL)
 
 Implements SOLID & DDD principles to decouple the MCP server's core logic
 from the specific telemetry infrastructure (SessionStore/SQLite).
@@ -17,47 +17,61 @@ import os
 import time
 from functools import wraps
 from pathlib import Path
-from typing import Any, Callable
+from typing import Any, Callable, Optional
 
+from mmcp.application.ports.telemetry_store import TelemetryStorePort
+from mmcp.domain.models import UsageEvent
 from mmcp.infrastructure.environment.config import get_config
 from mmcp.infrastructure.environment.orchestrator_detector import get_orchestrator_info
-from mmcp.infrastructure.persistence.session_store import SessionStore, UsageEvent
-
-_telemetry_store: SessionStore | None = None
-_telemetry_store_db_path: Path | None = None
-
-
-def _get_telemetry_store() -> SessionStore:
-    """Resolve the telemetry store lazily so config overrides hit the active DB."""
-    global _telemetry_store, _telemetry_store_db_path
-
-    current_db_path = Path(get_config().resolve_cache_db_path())
-    if _telemetry_store is None or _telemetry_store_db_path != current_db_path:
-        _telemetry_store = SessionStore(current_db_path)
-        _telemetry_store_db_path = current_db_path
-    return _telemetry_store
+from mmcp.infrastructure.persistence.session_store import SessionStore
 
 
 class TelemetryService:
     """
     Domain Service enforcing Dependency Inversion Principle (DIP).
     Isolates the rest of the application from the SQLite persistence logic.
+
+    Supports two calling conventions:
+    1. Instance method: TelemetryService(store).log_usage(event) - proper DIP
+    2. Direct store call via instance: instance._store.record_usage(event)
     """
 
-    @staticmethod
-    def log_usage(event: UsageEvent) -> None:
+    def __init__(self, store: TelemetryStorePort):
+        """
+        Initialize with a telemetry store port.
+
+        Args:
+            store: Any implementation of TelemetryStorePort (e.g., SessionStoreQueries)
+        """
+        self._store = store
+
+    def log_usage(self, event: UsageEvent) -> None:
         """
         Record a telemetry event into the underlying persistence store.
         If we eventually move from SQLite to a remote API, this is the
         only point of change.
         """
         try:
-            _get_telemetry_store().record_usage(event)
+            self._store.record_usage(event)
         except Exception as e:
             # Telemetry is non-critical path; failing to log shouldn't crash the server
             import logging
 
             logging.error(f"Failed to record telemetry: {e}")
+
+
+# Module-level log_usage function for backward compatibility
+# This allows existing code that calls TelemetryService.log_usage(event)
+# to work without instantiation
+_log_usage_static: Any = None
+
+
+def log_usage(event: UsageEvent) -> None:
+    """
+    Module-level function for backward compatibility.
+    Delegates to the module-level telemetry service instance.
+    """
+    _get_telemetry_service().log_usage(event)
 
 
 def _coerce_int(value: Any, default: int = 0) -> int:
@@ -220,38 +234,30 @@ def _extract_usage_metrics(payload: Any) -> dict[str, int]:
     return usage
 
 
-def track_telemetry(tool_name: str) -> Callable:
+# Module-level telemetry service instance for backward compatibility
+_telemetry_service: Optional[TelemetryService] = None
+
+
+def _get_telemetry_service() -> TelemetryService:
+    """Get or create the module-level telemetry service instance."""
+    global _telemetry_service
+    current_db_path = get_config().resolve_cache_db_path()
+    if _telemetry_service is None or _telemetry_service._store.db_path != current_db_path:
+        _telemetry_service = TelemetryService(SessionStore(current_db_path))
+    return _telemetry_service
+
+
+def _telemetry_log_usage(event: UsageEvent) -> None:
     """
-    Decorator implementing an AOP (Aspect-Oriented Programming) wrapper.
-    Ensures that core LLM optimization tools don't violate the Single
-    Responsibility Principle (SRP) by knowing about analytics mechanisms.
+    Internal function to log telemetry.
+    Uses instance method when called via instance, handles module-level calls.
     """
-
-    def decorator(func: Callable) -> Callable:
-        @wraps(func)
-        def wrapper(*args, **kwargs) -> Any:
-            # 1. Start timer
-            start_time = time.perf_counter()
-
-            # 2. Execute original domain logic
-            result = func(*args, **kwargs)
-
-            # 3. Stop timer
-            latency_ms = (time.perf_counter() - start_time) * 1000.0
-
-            # 4. Extract telemetry payload (async/non-blocking ideally, but safe to inline)
-            try:
-                _process_telemetry_event(tool_name, latency_ms, args, kwargs, result)
-            except Exception as e:
-                import logging
-
-                logging.warning(f"Telemetry extraction failed for {tool_name}: {e}")
-
-            return result
-
-        return wrapper
-
-    return decorator
+    svc = _get_telemetry_service()
+    try:
+        svc._store.record_usage(event)
+    except Exception as e:
+        import logging
+        logging.error(f"Failed to record telemetry: {e}")
 
 
 def _process_telemetry_event(tool_name: str, latency_ms: float, args: tuple, kwargs: dict, result: Any) -> None:
@@ -295,4 +301,39 @@ def _process_telemetry_event(tool_name: str, latency_ms: float, args: tuple, kwa
     )
 
     # 5. Delegate to domain service
-    TelemetryService.log_usage(event)
+    # Use direct store call for DIP compliance - TelemetryService just delegates
+    _telemetry_log_usage(event)
+
+
+def track_telemetry(tool_name: str) -> Callable:
+    """
+    Decorator implementing an AOP (Aspect-Oriented Programming) wrapper.
+    Ensures that core LLM optimization tools don't violate the Single
+    Responsibility Principle (SRP) by knowing about analytics mechanisms.
+    """
+
+    def decorator(func: Callable) -> Callable:
+        @wraps(func)
+        def wrapper(*args, **kwargs) -> Any:
+            # 1. Start timer
+            start_time = time.perf_counter()
+
+            # 2. Execute original domain logic
+            result = func(*args, **kwargs)
+
+            # 3. Stop timer
+            latency_ms = (time.perf_counter() - start_time) * 1000.0
+
+            # 4. Extract telemetry payload (async/non-blocking ideally, but safe to inline)
+            try:
+                _process_telemetry_event(tool_name, latency_ms, args, kwargs, result)
+            except Exception as e:
+                import logging
+
+                logging.warning(f"Telemetry extraction failed for {tool_name}: {e}")
+
+            return result
+
+        return wrapper
+
+    return decorator

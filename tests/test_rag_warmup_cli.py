@@ -3,8 +3,9 @@ import time
 from rich.console import Console
 
 import mmcp.presentation.cli.cli as cli
+from mmcp.domain.models import UsageEvent
 from mmcp.infrastructure.environment.config import get_config
-from mmcp.infrastructure.persistence.session_store import SessionStore, UsageEvent
+from mmcp.infrastructure.persistence.session_store import SessionStore
 from mmcp.presentation.cli.cli import (
     DetailPage,
     _build_doctor_content,

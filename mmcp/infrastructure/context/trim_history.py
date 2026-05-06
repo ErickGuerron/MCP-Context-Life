@@ -437,7 +437,7 @@ def trim_messages(
     encoding: str = DEFAULT_ENCODING,
 ) -> TrimResult:
     """
-    Main entry point ΓÇö dispatches to the correct strategy.
+    Main entry point — dispatches to the correct strategy.
 
     Args:
         messages: OpenAI-style message array
@@ -446,16 +446,9 @@ def trim_messages(
         preserve_recent: (smart only) How many recent messages to protect
         encoding: Tiktoken encoding to use
     """
-    strategy_enum = TrimStrategy(strategy.lower())
-
-    if strategy_enum == TrimStrategy.TAIL:
-        return trim_tail(messages, max_tokens, encoding)
-    elif strategy_enum == TrimStrategy.HEAD:
-        return trim_head(messages, max_tokens, encoding)
-    elif strategy_enum == TrimStrategy.SMART:
-        return trim_smart(messages, max_tokens, preserve_recent, encoding)
-    else:
-        raise ValueError(f"Unknown strategy: {strategy}")
+    # Use TrimOrchestrator for strategy dispatch
+    from mmcp.infrastructure.context.trim_orchestrator import trim_messages_orchestrated
+    return trim_messages_orchestrated(messages, max_tokens, strategy, preserve_recent, encoding)
 
 
 # ============================================================

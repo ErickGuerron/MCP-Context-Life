@@ -37,7 +37,7 @@ def test_process_telemetry_event_uses_trim_diagnostics(monkeypatch):
         lambda: OrchestratorInfo(is_detected=True, orchestrator_name="gentle-ai"),
     )
     monkeypatch.setattr(
-        "mmcp.infrastructure.telemetry.telemetry_service.TelemetryService.log_usage",
+        "mmcp.infrastructure.telemetry.telemetry_service._telemetry_log_usage",
         lambda event: captured.setdefault("event", event),
     )
 
@@ -72,7 +72,7 @@ def test_process_telemetry_event_uses_cache_metadata_for_saved_tokens(monkeypatc
         lambda: OrchestratorInfo(is_detected=True, orchestrator_name="opencode"),
     )
     monkeypatch.setattr(
-        "mmcp.infrastructure.telemetry.telemetry_service.TelemetryService.log_usage",
+        "mmcp.infrastructure.telemetry.telemetry_service._telemetry_log_usage",
         lambda event: captured.setdefault("event", event),
     )
 
@@ -110,7 +110,7 @@ def test_process_telemetry_event_uses_nested_health_metrics(monkeypatch):
         lambda: OrchestratorInfo(is_detected=True, orchestrator_name="opencode"),
     )
     monkeypatch.setattr(
-        "mmcp.infrastructure.telemetry.telemetry_service.TelemetryService.log_usage",
+        "mmcp.infrastructure.telemetry.telemetry_service._telemetry_log_usage",
         lambda event: captured.setdefault("event", event),
     )
 

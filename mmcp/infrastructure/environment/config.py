@@ -367,3 +367,9 @@ def reset_config() -> None:
     """Reset config singleton (for testing)."""
     global _config
     _config = None
+
+
+def reset_telemetry_service() -> None:
+    """Reset telemetry service singleton (for testing)."""
+    from mmcp.infrastructure.telemetry.telemetry_service import _telemetry_service
+    _telemetry_service = None

@@ -6,9 +6,9 @@ import time
 from dataclasses import dataclass
 from typing import Any
 
+from mmcp.domain.models import UsageEvent
 from mmcp.application.ports.telemetry_store import TelemetryStorePort
 from mmcp.infrastructure.environment.orchestrator_detector import OrchestratorInfo
-from mmcp.infrastructure.persistence.session_store import UsageEvent
 
 
 def _coerce_int(value: Any, default: int = 0) -> int:

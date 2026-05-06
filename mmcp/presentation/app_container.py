@@ -23,6 +23,8 @@ from mmcp.infrastructure.environment.config import get_config, get_rag_warmup_mo
 from mmcp.infrastructure.knowledge.rag_engine import RAGEngine
 from mmcp.infrastructure.persistence.cache_manager import CacheLoop
 from mmcp.infrastructure.persistence.session_store import SessionStore
+from mmcp.infrastructure.persistence.session_store_connection import SessionStoreConnection
+from mmcp.infrastructure.persistence.session_store_queries import SessionStoreQueries
 from mmcp.infrastructure.tokens.token_counter import TokenBudget
 
 
@@ -125,7 +127,9 @@ class AppContainer:
     def get_telemetry_service(self) -> TelemetryService:
         current_key = str(get_config().resolve_cache_db_path())
         if self._telemetry_service is None or self._telemetry_service_config_key != current_key:
-            self._telemetry_service = TelemetryService(SessionStore(Path(current_key)))
+            connection = SessionStoreConnection(Path(current_key))
+            queries = SessionStoreQueries(connection)
+            self._telemetry_service = TelemetryService(queries)
             self._telemetry_service_config_key = current_key
         return self._telemetry_service
 

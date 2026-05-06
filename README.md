@@ -139,6 +139,18 @@ Add to `~/.config/opencode/opencode.json`:
 }
 ```
 
+To make the client run Context-Life automatically on every turn, add a first-step policy in your agent/system prompt that calls `preflight_request` before planning or answering.
+
+```text
+Before every user turn, call the Context-Life MCP prompt `preflight_request` with the raw user request, then follow the returned `applied_process`.
+```
+
+If you want to bake it into OpenCode, add the same rule to the primary agent prompt:
+
+```text
+Always call `preflight_request` before planning the response to any user message. If the result says `noop`, answer normally. If it recommends another step, follow `applied_process` exactly.
+```
+
 ### Install from the TUI
 
 Open `context-life tui`, go to **Config → Install Context-Life**, and choose one of:
@@ -148,6 +160,14 @@ Open `context-life tui`, go to **Config → Install Context-Life**, and choose o
 - **Visual Studio Code**
 
 Each option adds only the `context-life` MCP entry to that tool’s config.
+
+For automatic preflight, the client must be configured to call `preflight_request` first; the server cannot intercept chat invisibly on its own.
+
+Suggested Antigravity instruction:
+
+```text
+Before answering any user message, call the Context-Life MCP prompt `preflight_request` with the raw prompt. Use the returned `applied_process` to decide whether to optimize, search context, or continue normally.
+```
 
 ### Claude Desktop
 
