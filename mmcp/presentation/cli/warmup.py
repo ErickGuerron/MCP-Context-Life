@@ -39,7 +39,6 @@ def _build_warmup_modes_detail_page(width: int):
 
 
 def _render_rag_warmup_interactive_selector():
-    from rich.console import Group
 
     return Group(_build_rag_warmup_summary_panel(), Text(""), _build_rag_warmup_table())
 

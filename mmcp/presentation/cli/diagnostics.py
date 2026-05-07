@@ -191,9 +191,11 @@ def show_info():
 
 def _build_doctor_content():
     from mmcp.infrastructure.environment.config import _default_config_path, get_config, get_rag_warmup_mode_details
+    from mmcp.infrastructure.environment.orchestrator_detector import get_orchestrator_info
 
     ver = get_version()
     checks: list[tuple[str, str, str]] = []
+    orchestrator_checks: list[tuple[str, str, str]] = []
 
     py_ver = f"{sys.version_info.major}.{sys.version_info.minor}.{sys.version_info.micro}"
     py_ok = sys.version_info >= (3, 10)
@@ -279,6 +281,30 @@ def _build_doctor_content():
     storage_checks = checks[8:11]
     release_checks = checks[11:]
 
+    # Build orchestrator info
+    orchestrator = get_orchestrator_info()
+    orchestrator_checks.append(("Mode", "✅", cfg.orchestrator_mode))
+    is_det = orchestrator.is_detected
+    name = orchestrator.orchestrator_name
+    method = orchestrator.detection_method
+    orchestrator_checks.append(("Detected", "✅" if is_det else "ℹ️", f"{name} ({method})"))
+    orchestrator_checks.append(
+        (
+            "Manual override",
+            "✅" if orchestrator.manual_override else "❌",
+            "yes" if orchestrator.manual_override else "no",
+        )
+    )
+    f = orchestrator.features
+    orchestrator_checks.append(("Engram", "✅" if f.has_engram else "❌", "active" if f.has_engram else "not detected"))
+    orchestrator_checks.append(
+        ("SDD agents", "✅" if f.has_sdd_agents else "❌", "available" if f.has_sdd_agents else "not detected")
+    )
+    orchestrator_checks.append(("Skills", "✅" if f.has_skills else "❌", "active" if f.has_skills else "not detected"))
+    orchestrator_checks.append(
+        ("Agent teams", "✅" if f.has_agent_teams else "❌", "available" if f.has_agent_teams else "not detected")
+    )
+
     def _lines_for(items: list[tuple[str, str, str]]) -> list[str]:
         return [f"{status} [bold]{name}[/] — [dim]{detail}[/]" for name, status, detail in items]
 
@@ -288,6 +314,7 @@ def _build_doctor_content():
         _compact_list_panel("Runtime", _lines_for(runtime_checks), border_style="cyan"),
         _compact_list_panel("Dependencies", _lines_for(dependency_checks), border_style="green"),
         _compact_list_panel("Storage", _lines_for(storage_checks), border_style="yellow"),
+        _compact_list_panel("Orchestrator", _lines_for(orchestrator_checks), border_style="cyan"),
         _compact_list_panel("Release", _lines_for(release_checks), border_style="magenta"),
         _compact_panel(
             "Paths",

@@ -14,7 +14,7 @@ from __future__ import annotations
 
 import json
 import os
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Optional
 
@@ -189,6 +189,16 @@ def save_config(
 
 
 @dataclass
+class OrchestratorFeaturesConfig:
+    """Orchestrator feature flags from config file."""
+
+    engram: bool = False
+    sdd: bool = False
+    skills: bool = False
+    agents: bool = False
+
+
+@dataclass
 class CLConfig:
     """Context-Life runtime configuration."""
 
@@ -220,6 +230,10 @@ class CLConfig:
 
     # --- Upgrade ---
     github_repo: str = "ErickGuerron/MCP-Context-Life"
+
+    # --- Orchestrator ---
+    orchestrator_mode: str = "auto"
+    orchestrator_features: OrchestratorFeaturesConfig = field(default_factory=OrchestratorFeaturesConfig)
 
     def resolve_data_dir(self) -> Path:
         """Resolve the data directory, creating it if needed."""
@@ -343,6 +357,23 @@ def load_config(config_path: Optional[str] = None) -> CLConfig:
         upgrade = data.get("upgrade", {})
         if "github_repo" in upgrade:
             config.github_repo = upgrade["github_repo"]
+
+        orchestrator = data.get("orchestrator", {})
+        if orchestrator:
+            mode = orchestrator.get("mode")
+            if mode and isinstance(mode, str):
+                # Unknown mode values default to "auto"
+                valid_modes = ("auto", "gentle-ai", "opencode", "engram", "none")
+                config.orchestrator_mode = mode if mode in valid_modes else "auto"
+
+            features_cfg = orchestrator.get("features", {})
+            if isinstance(features_cfg, dict):
+                config.orchestrator_features = OrchestratorFeaturesConfig(
+                    engram=bool(features_cfg.get("engram", False)),
+                    sdd=bool(features_cfg.get("sdd", False)),
+                    skills=bool(features_cfg.get("skills", False)),
+                    agents=bool(features_cfg.get("agents", False)),
+                )
 
     # Tier 3: Environment overrides (highest priority)
     _env_override(config)

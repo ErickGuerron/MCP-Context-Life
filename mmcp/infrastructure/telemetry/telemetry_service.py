@@ -338,6 +338,14 @@ def track_telemetry(tool_name: str) -> Callable:
             # 3. Stop timer
             latency_ms = (time.perf_counter() - start_time) * 1000.0
 
+            # 3b. Record tool call for orchestrator pattern detection
+            try:
+                from mmcp.infrastructure.environment.orchestrator_detector import get_tool_pattern_tracker
+
+                get_tool_pattern_tracker().record(tool_name)
+            except Exception:
+                pass  # Non-critical path
+
             # 4. Extract telemetry payload (async/non-blocking ideally, but safe to inline)
             try:
                 _process_telemetry_event(tool_name, latency_ms, args, kwargs, result)

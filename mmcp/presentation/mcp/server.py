@@ -820,9 +820,7 @@ def intercept_user_request(
 
     if intent == "context_optimization":
         recommended_next_tool = (
-            "optimize_messages"
-            if report.orchestrator_hints.get("should_trim_now")
-            else "get_orchestration_advice"
+            "optimize_messages" if report.orchestrator_hints.get("should_trim_now") else "get_orchestration_advice"
         )
         urgency = "high" if usage_percent >= 90 else "medium"
         reason = (
@@ -839,17 +837,11 @@ def intercept_user_request(
     elif intent == "debugging":
         recommended_next_tool = "analyze_context_health_tool"
         urgency = "medium"
-        reason = (
-            "This is a debugging request, so context health analysis should "
-            "precede any heavy operations."
-        )
+        reason = "This is a debugging request, so context health analysis should precede any heavy operations."
     else:
         recommended_next_tool = "analyze_context_health_tool"
         urgency = "low"
-        reason = (
-            "No orchestrator-specific action is required yet; "
-            "continue monitoring context health."
-        )
+        reason = "No orchestrator-specific action is required yet; continue monitoring context health."
 
     applied_process = ["normalize_request"]
 
@@ -961,8 +953,34 @@ def rag_warmup_resource() -> str:
 
 @mcp.resource("status://orchestrator")
 def orchestrator_resource() -> str:
-    """RFC-002 P3: Detected orchestrator information and advisor mode status."""
-    return json.dumps(get_orchestrator_info().to_dict())
+    """
+    RFC-002 P3: Detected orchestrator information and advisor mode status.
+
+    Returns mode from config, detected orchestrator, feature flags,
+    detection method, manual_override flag, and guidance if no orchestrator detected.
+    """
+    from mmcp.infrastructure.environment.config import get_config
+
+    cfg = get_config()
+    info = get_orchestrator_info()
+    info_dict = info.to_dict()
+
+    # Add config mode and guidance to the resource response
+    info_dict["mode"] = cfg.orchestrator_mode
+    info_dict["detected_orchestrator"] = info.orchestrator_name
+
+    # Add guidance when no orchestrator was detected in auto mode
+    guidance = None
+    if cfg.orchestrator_mode == "auto" and not info.is_detected:
+        guidance = (
+            "No orchestrator detected. If you're using Gentle AI, OpenCode, or another "
+            "orchestrator, you can configure it manually in ~/.config/context-life/config.toml:\n\n"
+            "[orchestrator]\n"
+            'mode = "gentle-ai"  # or "opencode", "engram", etc.'
+        )
+    info_dict["guidance"] = guidance
+
+    return json.dumps(info_dict)
 
 
 @mcp.resource("status://orchestration")
