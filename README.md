@@ -22,22 +22,48 @@
 
 ---
 
-## ✨ What is Context-Life?
+## What is Context-Life?
 
 Context-Life is an **MCP server** that optimizes how LLMs use their context window. Think of **Contexty** (our mascot) as a little helper that sits between your AI client and the model, making sure every token counts.
 
-- 🔢 **Token Counting** — Exact counts using tiktoken with LRU caching
-- ✂️ **Smart Trimming** — Intelligent message array optimization that never drops system instructions
-- 🔍 **Local RAG** — Semantic search over your files using LanceDB + multilingual embeddings
-- 💾 **Prompt Caching** — Two-level prefix segmentation for maximum cache reuse
-- 🏥 **Context Health** — Real-time health score (0-100) with actionable recommendations
-- 🤖 **Orchestrator Detection** — Auto-detects Gentle AI, Engram, and MCP orchestrators
+- **Token Counting** — Exact counts using tiktoken with LRU caching
+- **Smart Trimming** — Intelligent message array optimization that never drops system instructions
+- **Local RAG** — Semantic search over your files using LanceDB + multilingual embeddings
+- **Prompt Caching** — Two-level prefix segmentation for maximum cache reuse
+- **Context Health** — Real-time health score (0-100) with actionable recommendations
+- **Orchestrator Detection** — Auto-detects Gentle AI, Engram, and MCP orchestrators
+- **Intelligent Context Optimization** — Classifies prompts as LIGHT / REQUIRED / CRITICAL to decide when optimization is actually needed
+- **HALT Governance** — Detects contradictions and halts before generating incompatible code
 
 ---
 
-## 🚀 Install
+## Install
 
-### Using uv (Fastest & Recommended)
+### Using Scoop (Windows — Recommended)
+
+Scoop is the recommended installation method for Windows. It handles updates automatically and keeps everything under user control.
+
+```bash
+scoop bucket add context-life https://github.com/ErickGuerron/MCP-Context-Life
+scoop install context-life
+```
+
+To update:
+```bash
+scoop update context-life
+```
+
+**Don't have Scoop?** Install it first (PowerShell):
+```powershell
+Set-ExecutionPolicy -ExecutionPolicy RemoteSigned -Scope CurrentUser
+irm get.scoop.sh | iex
+```
+
+For full scoop documentation, visit [scoop.sh](https://scoop.sh).
+
+---
+
+### Using uv (Fastest)
 
 ```bash
 uv tool install "git+https://github.com/ErickGuerron/MCP-Context-Life.git"
@@ -100,7 +126,7 @@ docker run --rm context-life doctor
 
 ---
 
-## ⌨️ CLI Commands
+## CLI Commands
 
 ```bash
 context-life                           # Start MCP server (stdio)
@@ -121,7 +147,7 @@ context-life help                      # Show help
 
 ---
 
-## 🔧 Setup with MCP Clients
+## Setup with MCP Clients
 
 ### OpenCode
 
@@ -201,7 +227,7 @@ Edit `claude_desktop_config.json`:
 
 ---
 
-## 🧰 Features
+## Features
 
 ### Tools
 
@@ -216,8 +242,8 @@ Edit `claude_desktop_config.json`:
 | `rag_stats` | Knowledge base statistics |
 | `clear_knowledge` | Clear all indexed knowledge |
 | `reset_token_budget` | Reset token budget tracker |
-| `analyze_context_health_tool` | 🆕 Context health analysis with score, metrics & recommendations |
-| `get_orchestration_advice` | 🆕 Actionable next-step contract for Gentle AI / MCP orchestrators |
+| `analyze_context_health_tool` | Context health analysis with score, metrics & recommendations |
+| `get_orchestration_advice` | Actionable next-step contract for Gentle AI / MCP orchestrators |
 
 ### Resources
 
@@ -226,12 +252,12 @@ Edit `claude_desktop_config.json`:
 | `status://token_budget` | Current token budget + LRU cache stats |
 | `cache://status` | Prompt cache hit/miss performance |
 | `rag://stats` | RAG knowledge base info |
-| `status://orchestrator` | 🆕 Detected orchestrator & advisor mode status |
-| `status://orchestration` | 🆕 Static orchestration contract and recommended tool flow |
+| `status://orchestrator` | Detected orchestrator & advisor mode status |
+| `status://orchestration` | Static orchestration contract and recommended tool flow |
 
 ---
 
-## 🏗️ Architecture
+## Architecture
 
 ```
 ┌──────────────────────────────────────────────────┐
@@ -275,7 +301,7 @@ Composition now starts in `mmcp/presentation/mcp/server.py`, which wires MCP too
 
 ---
 
-## 📖 How It Works
+## How It Works
 
 ### Token Counter
 Uses `tiktoken` for exact token counting. Supports `cl100k_base` (GPT-4, Claude), `o200k_base` (GPT-4o), and `p50k_base` (Codex). **v0.5.0:** LRU cache (1024 entries) eliminates redundant counts during trim iterations.
@@ -318,6 +344,18 @@ Auto-detects when CL runs alongside AI orchestrators like Gentle AI or Engram:
 - **Workspace artifacts**: `.gemini/`, `.gga`, `.agent/`, `.agents/`
 - Enables "Advisor Mode" with proactive optimization hints
 
+> **[Orchestrator Integration Guide](docs/orchestrator-integration.md)** — Context flow, Gentle AI / SDD integration, and adapter configuration.
+
+### Intelligent Context Optimization *(v0.7.1)*
+D4 evaluates every prompt and classifies it as LIGHT / REQUIRED / CRITICAL:
+- **LIGHT** (confidence ≥ 0.80): Prompt is clear — continue without optimization
+- **REQUIRED** (confidence 0.55-0.79): Prompt needs restructuring or context — call `cache_context` only if needed
+- **CRITICAL** (any conflict): Contradiction detected — **HALT** and resolve before proceeding
+
+The orchestrator receives both the legacy contract (`intent`, `keywords`, `advice`) and the D4 decision under `d4{}`, so existing workflows are preserved while gaining intelligent routing.
+
+> **[Context Optimization Logic](docs/context-optimization.md)** — Business rules, state definitions, confidence thresholds, HALT triggers, and token cost analysis.
+
 ### Orchestration Advice *(vNext)*
 Context-Life now exposes a first explicit orchestration contract for upstream orchestrators:
 - `get_orchestration_advice` combines health + detection into actionable next steps
@@ -326,7 +364,7 @@ Context-Life now exposes a first explicit orchestration contract for upstream or
 
 ---
 
-## ⚙️ Configuration
+## Configuration
 
 Context-Life uses a three-tier configuration system:
 
@@ -374,7 +412,7 @@ If you prefer not to memorize commands, run `context-life warmup interactive` or
 
 ---
 
-## 🧪 Development
+## Development
 
 ```bash
 # Run with HTTP transport for testing
@@ -398,18 +436,26 @@ pytest -m performance
 
 ---
 
-## 📋 Requirements
+## Documentation
+
+| Document | Description |
+|----------|-------------|
+| [Context Optimization Logic](docs/context-optimization.md) | Business rules and behavior of the intelligent prompt optimization system (LIGHT/REQUIRED/CRITICAL states, confidence scoring, HALT governance) |
+| [Orchestrator Integration Guide](docs/orchestrator-integration.md) | How Context-Life integrates with Gentle AI and other orchestrators, context flow, and adapter configuration |
+| [Installation Guide](docs/installation.md) | Complete installation instructions for all platforms (Scoop, uv, pipx, pip, Docker) |
+
+## Requirements
 
 - Python >= 3.10
 - ~500MB disk for sentence-transformers model (downloaded once on first use)
 - No GPU required — runs on CPU
 
-## 📄 License
+## License
 
 [MIT License](LICENSE.md)
 
 ---
 
 <p align="center">
-  <sub>Built with ❤️ by <a href="https://github.com/ErickGuerron">Erick Guerrón</a></sub>
+  <sub>Built by <a href="https://github.com/ErickGuerron">Erick Guerrón</a></sub>
 </p>
