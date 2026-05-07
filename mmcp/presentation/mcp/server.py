@@ -14,6 +14,7 @@ The main MCP server that exposes all context optimization tools:
 from __future__ import annotations
 
 import json
+import os
 import re
 from collections import Counter
 from typing import Optional
@@ -34,6 +35,38 @@ from mmcp.infrastructure.tokens.token_counter import (
     get_cache_info,
 )
 from mmcp.presentation.app_container import AppContainer
+
+# --- OptimizationStatus helper ---
+_MAX_RESULTING_PROMPT_LENGTH = 2048
+
+
+def _build_optimization_status(
+    original_tokens: int,
+    optimized_tokens: int,
+    messages_modified: int,
+    resulting_messages: list[dict],
+    strategy: str,
+    encoding: str = DEFAULT_ENCODING,
+) -> dict:
+    """
+    Build an optimization_status dict per the mcp-status-display spec.
+
+    The resulting_prompt is the serialized JSON of the message array,
+    truncated to _MAX_RESULTING_PROMPT_LENGTH chars.
+    """
+    prompt_json = json.dumps(resulting_messages, sort_keys=False)
+    truncated = len(prompt_json) > _MAX_RESULTING_PROMPT_LENGTH
+    resulting_prompt = prompt_json[:_MAX_RESULTING_PROMPT_LENGTH]
+
+    return {
+        "strategy": strategy,
+        "original_tokens": original_tokens,
+        "optimized_tokens": optimized_tokens,
+        "messages_modified": messages_modified,
+        "resulting_prompt": resulting_prompt,
+        "truncated": truncated,
+    }
+
 
 APP_CONTAINER = AppContainer()
 
@@ -424,8 +457,22 @@ def optimize_messages(
         JSON with optimized messages array and diagnostics
     """
     msgs = json.loads(messages)
+    original_token_count = count_messages_tokens(msgs, encoding)
     result = trim_messages(msgs, max_tokens, strategy, preserve_recent, encoding)
-    return json.dumps(result.to_dict())
+    response_dict = result.to_dict()
+
+    # D2: Append optimization_status when advisor_mode is active
+    if get_orchestrator_info().advisor_mode:
+        response_dict["optimization_status"] = _build_optimization_status(
+            original_tokens=original_token_count,
+            optimized_tokens=result.trimmed_token_count,
+            messages_modified=result.messages_removed,
+            resulting_messages=result.messages,
+            strategy=strategy,
+            encoding=encoding,
+        )
+
+    return json.dumps(response_dict)
 
 
 @mcp.tool()
@@ -549,6 +596,33 @@ def cache_context(
             rag_context = "\n\n---\n\n".join(f"[{r.source} | chunk {r.chunk_index}]\n{r.text}" for r in results)
 
     result = _get_cache_loop().process_messages(msgs, rag_context=rag_context)
+
+    # D2: Append optimization_status when advisor_mode is active
+    if get_orchestrator_info().advisor_mode:
+        cache_meta = result.get("cache_metadata", {})
+        original_tokens = cache_meta.get("static_prefix_tokens", 0)
+        optimized_tokens = cache_meta.get("uncached_input_tokens", original_tokens)
+        messages_modified = cache_meta.get("dynamic_messages_count", 0)
+
+        # Build resulting_prompt from the static prefix (system + RAG context)
+        resulting_messages = [msg for msg in msgs if msg.get("role", "").lower() in ("system", "developer")]
+        # Include RAG context message if present in the processed result
+        if cache_meta.get("rag_prefix_tokens", 0) > 0 and rag_context:
+            resulting_messages.append(
+                {
+                    "role": "system",
+                    "content": f"[CL Knowledge Context]\n{rag_context}",
+                }
+            )
+
+        result["optimization_status"] = _build_optimization_status(
+            original_tokens=original_tokens,
+            optimized_tokens=optimized_tokens,
+            messages_modified=messages_modified,
+            resulting_messages=resulting_messages,
+            strategy="cache",
+        )
+
     return json.dumps(result)
 
 
@@ -722,17 +796,22 @@ def intercept_user_request(
     transparently intercept chat traffic by itself, so callers should invoke
     this tool explicitly as the first step.
     """
-    normalized_request = _normalize_request_text(request)
-    keywords = _extract_request_keywords(normalized_request)
-    intent = _classify_request_intent(normalized_request)
+    # D4: Delegate to ContextOptimizer for full classification → resolution → pack flow
+    from mmcp.application.features.context.context_optimizer import ContextOptimizer
 
+    project_path = os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
+    optimizer = ContextOptimizer(project_path)
+    context_pack = optimizer.run(request, encoding=encoding)
+
+    # Run legacy flow to build the standard contract response
+    normalized_request = _normalize_request_text(request)
+    intent = _classify_request_intent(normalized_request)
+    keywords = _extract_request_keywords(normalized_request)
     synthetic_messages = [
         {"role": "system", "content": "Context-Life request interceptor."},
         {"role": "user", "content": normalized_request},
     ]
     report = analyze_context_health(synthetic_messages, max_tokens, encoding)
-    health = report.to_dict()
-
     metrics = report.metrics
     total_tokens = metrics.get("total_tokens", 0)
     usage_percent = metrics.get("token_usage_percent", 0.0)
@@ -741,36 +820,43 @@ def intercept_user_request(
 
     if intent == "context_optimization":
         recommended_next_tool = (
-            "optimize_messages" if report.orchestrator_hints.get("should_trim_now") else "get_orchestration_advice"
+            "optimize_messages"
+            if report.orchestrator_hints.get("should_trim_now")
+            else "get_orchestration_advice"
         )
         urgency = "high" if usage_percent >= 90 else "medium"
         reason = (
-            "The request is already about context optimization, so the next step is to "
-            "inspect or trim the active conversation."
+            "The request is already about context optimization, so the next step "
+            "is to inspect or trim the active conversation."
         )
     elif intent == "feature_request":
         recommended_next_tool = "search_context"
         urgency = "medium"
         reason = (
-            "This is a build request, so the server should normalize it and look for project context "
-            "before planning work."
+            "This is a build request, so the server should normalize it and look "
+            "for project context before planning work."
         )
     elif intent == "debugging":
         recommended_next_tool = "analyze_context_health_tool"
         urgency = "medium"
         reason = (
-            "This looks like a troubleshooting request; start by measuring context pressure and then "
-            "search for related code or notes."
+            "This is a debugging request, so context health analysis should "
+            "precede any heavy operations."
         )
     else:
-        recommended_next_tool = "get_orchestration_advice"
+        recommended_next_tool = "analyze_context_health_tool"
         urgency = "low"
-        reason = "The request is generic, so the best first step is to gather orchestration advice."
+        reason = (
+            "No orchestrator-specific action is required yet; "
+            "continue monitoring context health."
+        )
 
-    if intent == "feature_request":
-        search_query = " ".join(keywords[:6]) or normalized_request
-    else:
-        search_query = normalized_request
+    applied_process = ["normalize_request"]
+
+    # Handle CRITICAL state: override recommended_next_tool and update applied_process
+    if context_pack.state == "CRITICAL":
+        recommended_next_tool = "halt"
+        applied_process = ["normalize_request", "d4_evaluation"]
 
     advice = {
         "recommended_next_tool": recommended_next_tool,
@@ -783,20 +869,20 @@ def intercept_user_request(
         "should_snapshot_context": usage_percent >= 75 or redundancy >= 0.2,
     }
 
-    result = {
-        "original_request": request,
-        "normalized_request": normalized_request,
+    # Build legacy response
+    legacy_response = {
         "intent": intent,
         "keywords": keywords,
-        "search_query": search_query,
-        "health": health,
         "advice": advice,
-        "applied_process": _build_request_flow(intent, advice, keywords),
-        "note": (
-            "MCP servers cannot silently intercept client chat; use this tool as the first step to route the request."
-        ),
+        "applied_process": applied_process,
     }
-    return json.dumps(result)
+
+    # Merge D4 output under "d4" key — include full ContextPack fields
+    d4_fields = context_pack.to_dict()
+
+    legacy_response["d4"] = d4_fields
+
+    return json.dumps(legacy_response)
 
 
 @mcp.prompt(

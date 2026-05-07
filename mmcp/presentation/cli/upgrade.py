@@ -3,6 +3,7 @@ from __future__ import annotations
 import os
 import subprocess
 import sys
+from enum import Enum
 
 from rich import box
 from rich.align import Align
@@ -11,6 +12,120 @@ from rich.panel import Panel
 from .cli import CONSOLE, GITHUB_REPO, REPO_URL, _fetch_latest_release
 from .ui.input import _read_tui_key
 from .ui.render import get_version
+
+
+class ErrorCode(Enum):
+    """Error codes for upgrade failures."""
+
+    E01 = "E01"  # Network failure
+    E02 = "E02"  # Permission denied
+    E03 = "E03"  # PEP 668 externally managed
+    E04 = "E04"  # Version not found
+    E05 = "E05"  # Checksum mismatch
+    E99 = "E99"  # Unknown error
+
+
+# Priority order: E03 checked first (most specific), then E01, E02, E04, E05
+_ERROR_CODE_PATTERNS = [
+    # E03 — PEP 668 externally managed (checked first)
+    (ErrorCode.E03, lambda s: "externally managed" in s.lower() or "not writable" in s.lower()),
+    # E01 — Network failure
+    (
+        ErrorCode.E01,
+        lambda s: (
+            "timeout" in s.lower()
+            or "connectiontimeout" in s.lower()
+            or "dns" in s.lower()
+            or "econnrefused" in s.lower()
+            or "httpserror" in s.lower()
+            or "connection refused" in s.lower()
+        ),
+    ),
+    # E02 — Permission denied
+    (ErrorCode.E02, lambda s: "eacces" in s.lower() or "eperm" in s.lower()),
+    # E04 — Version not found
+    (ErrorCode.E04, lambda s: "404" in s or "not found" in s.lower() or "not on pypi" in s.lower()),
+    # E05 — Checksum mismatch
+    (ErrorCode.E05, lambda s: "hash" in s.lower() and ("mismatch" in s.lower() or "do not match" in s.lower())),
+]
+
+ERROR_INFO: dict[ErrorCode, dict[str, str]] = {
+    ErrorCode.E01: {
+        "description": "Network failure",
+        "cause": "Connection timeout, DNS failure, ECONNREFUSED, or HTTPS error",
+        "remediation": "Check internet connection, proxy settings, or VPN",
+    },
+    ErrorCode.E02: {
+        "description": "Permission denied",
+        "cause": "EACCES or EPERM when trying to write to system directories",
+        "remediation": "Run as administrator or use --user flag",
+    },
+    ErrorCode.E03: {
+        "description": "PEP 668 externally managed",
+        "cause": "Python environment is externally managed and cannot be modified with pip",
+        "remediation": "Use `uv tool install` or create a virtual environment",
+    },
+    ErrorCode.E04: {
+        "description": "Version not found",
+        "cause": "Package version does not exist on PyPI or was not found",
+        "remediation": "Verify the version exists on PyPI or GitHub",
+    },
+    ErrorCode.E05: {
+        "description": "Checksum mismatch",
+        "cause": "Hash verification failed — downloaded file may be corrupted",
+        "remediation": "Retry the upgrade; if the issue persists, report the bug",
+    },
+    ErrorCode.E99: {
+        "description": "Unknown error",
+        "cause": "An unexpected error occurred",
+        "remediation": "Run `context-life doctor` for diagnostics",
+    },
+}
+
+
+def _parse_upgrade_error(stderr: str) -> ErrorCode:
+    """Classify upgrade failure into an error code by priority order."""
+    for code, matches in _ERROR_CODE_PATTERNS:
+        if matches(stderr):
+            return code
+    return ErrorCode.E99
+
+
+def _build_failure_panel(
+    old_version: str,
+    target_label: str,
+    install_target: str,
+    stderr_text: str | None,
+    error_code: ErrorCode | None = None,
+) -> Panel:
+    if error_code is None:
+        # Fallback to original behavior (E99 scenario)
+        body = (
+            f"[bold red]✗ Upgrade failed.[/]\n"
+            f"[bold]Current:[/] [yellow]v{old_version}[/]\n"
+            f"[bold]Target:[/] [green]{target_label}[/]\n\n"
+            "[bold]Recommended:[/] install uv first, then retry with uv tool.\n"
+            "[bold]Step 1:[/] python -m pip install uv\n"
+            f'[bold]Step 2:[/] uv tool install --force "{install_target}"\n\n'
+            "[dim]Enter: try again • Esc/q: cancel[/]"
+        )
+        if stderr_text:
+            body += f"\n\n[red]{stderr_text[:500]}[/]"
+        return Panel(body, title="Fallback with uv", border_style="yellow", box=box.ROUNDED)
+
+    info = ERROR_INFO[error_code]
+    body = (
+        f"[bold red]✗ Upgrade failed.[/]\n"
+        f"[bold]Code:[/] [red]{error_code.value}[/] — {info['description']}\n"
+        f"[bold]Current:[/] [yellow]v{old_version}[/]\n"
+        f"[bold]Target:[/] [green]{target_label}[/]\n\n"
+        f"[bold]Possible cause:[/] {info['cause']}\n"
+        f"[bold]Remediation:[/] {info['remediation']}\n\n"
+        "[dim]Enter: try again • Esc/q: cancel[/]"
+    )
+    if error_code == ErrorCode.E99 and stderr_text:
+        body += f"\n\n[red]{stderr_text[:500]}[/]"
+    return Panel(body, title=f"Upgrade failed — {error_code.value}", border_style="red", box=box.ROUNDED)
 
 
 def _clear_screen() -> None:
@@ -74,21 +189,6 @@ def _build_success_panel(old_version: str, new_version: str) -> Panel:
         border_style="green",
         box=box.ROUNDED,
     )
-
-
-def _build_failure_panel(old_version: str, target_label: str, install_target: str, stderr_text: str | None) -> Panel:
-    body = (
-        f"[bold red]✗ Upgrade failed.[/]\n"
-        f"[bold]Current:[/] [yellow]v{old_version}[/]\n"
-        f"[bold]Target:[/] [green]{target_label}[/]\n\n"
-        "[bold]Recommended:[/] install uv first, then retry with uv tool.\n"
-        "[bold]Step 1:[/] python -m pip install uv\n"
-        f'[bold]Step 2:[/] uv tool install --force "{install_target}"\n\n'
-        "[dim]Enter: try again • Esc/q: cancel[/]"
-    )
-    if stderr_text:
-        body += f"\n\n[red]{stderr_text[:500]}[/]"
-    return Panel(body, title="Fallback with uv", border_style="yellow", box=box.ROUNDED)
 
 
 def do_upgrade(target_version: str | None = None, dry_run: bool = False, inside_tui: bool = False):
@@ -161,6 +261,7 @@ def do_upgrade(target_version: str | None = None, dry_run: bool = False, inside_
             target_label,
             install_target,
             result.stderr.strip() or None,
+            error_code=_parse_upgrade_error(result.stderr.strip() or ""),
         )
         CONSOLE.print(Align.center(failure_panel, vertical="middle"))
         if _wait_for_key(allow_retry=True) == "enter":

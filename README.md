@@ -288,6 +288,9 @@ Three strategies with **strict budget guarantee**:
 
 ### RAG Engine
 Local vector search using **LanceDB** (serverless) + **paraphrase-multilingual-MiniLM-L12-v2** (multilingual embeddings). **v0.5.0:** Lazy model loading eliminates cold start latency — the embedding model loads only on first use.
+
+> [!WARNING]
+> If you're seeing ~30s delays when opening your AI client (OpenCode, Claude Desktop, etc.) for the first time after a cold start, it's the embedding model loading. Run `context-life warmup set startup` to pre-warm it at MCP boot, or `context-life prewarm` before opening your client.
 - Automatic deduplication by file hash
 - Token-budgeted retrieval with skip-and-continue packing
 - Per-source chunk limits (`max_chunks_per_source`)
