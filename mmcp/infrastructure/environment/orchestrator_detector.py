@@ -20,6 +20,8 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Optional
 
+_cached_result: Optional[OrchestratorInfo] = None
+
 
 @dataclass
 class OrchestratorFeatures:
