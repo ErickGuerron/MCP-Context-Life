@@ -169,7 +169,7 @@ def _build_confirmation_panel(
     old_version: str, target_label: str, release_url: str | None, same_version: bool
 ) -> Panel:
     lines = [
-        f"[bold]¿Querés actualizar el MCP?[/]  context-life {old_version} -> {target_label}",
+        f"[bold]Update the MCP?[/]  context-life {old_version} -> {target_label}",
         "[dim]Enter: continue • Esc/q: cancel[/]",
         "[dim]This will upgrade the installed package and may replace the current runtime files.[/]",
     ]

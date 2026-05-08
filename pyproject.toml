@@ -65,6 +65,9 @@ build-backend = "setuptools.build_meta"
 [tool.setuptools.packages.find]
 include = ["mmcp*"]
 
+[tool.setuptools.package-data]
+"mmcp.infrastructure.installation.context-life-integration" = ["*.md"]
+
 [tool.ruff]
 line-length = 120
 target-version = "py310"

@@ -1312,21 +1312,25 @@ def do_upgrade(target_version: str | None = None, dry_run: bool = False, inside_
 
 
 def _install_context_life_and_return(target_key: str) -> MenuActionResult:
-    from mmcp.infrastructure.installation.context_life_installer import install_context_life
+    from mmcp.infrastructure.installation.context_life_installer import install_context_life, verify_install
 
     result = install_context_life(target_key)
+    mcp_ok, skill_ok, message = verify_install(target_key, Path.home())
+
     if result.changed:
-        message = (
-            f"[bold green]✓ Context-Life added to {result.label}.[/]\n"
+        notice = (
+            f"[bold green]✓ Context-Life installed for {result.label}.[/]\n"
             f"[bold]Config:[/] [yellow]{result.path}[/]\n"
-            "[dim]Only the context-life MCP entry was written.[/]"
+            f"[dim]{message}[/]\n\n"
+            f"[bold yellow]⚠ Close and reopen {result.label} to activate the skill.[/]"
         )
     else:
-        message = (
-            f"[bold cyan]ℹ Context-Life is already configured in {result.label}.[/]\n"
-            f"[bold]Config:[/] [yellow]{result.path}[/]"
+        notice = (
+            f"[bold cyan]ℹ Context-Life is already configured for {result.label}.[/]\n"
+            f"[bold]Config:[/] [yellow]{result.path}[/]\n"
+            f"[dim]{message}[/]"
         )
-    return MenuActionResult(back_levels=1, notice=message)
+    return MenuActionResult(back_levels=1, notice=notice)
 
 
 def _build_install_menu() -> MenuScreen:

@@ -1,12 +1,17 @@
 from __future__ import annotations
 
 import json
+import logging
 import os
+import shutil
 import sys
 import tempfile
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Callable
+
+
+logger = logging.getLogger(__name__)
 
 
 @dataclass(frozen=True, slots=True)
@@ -111,12 +116,127 @@ def get_target(key: str) -> InstallTarget:
     raise KeyError(f"Unknown installation target: {key}")
 
 
+def get_skill_source_dir() -> Path:
+    """Return path to the bundled context-life-integration skill directory.
+
+    Uses importlib.resources to locate the skill bundled in the package.
+    Returns a Path object that can be used with shutil.copytree.
+    Raises FileNotFoundError if the bundled skill is missing.
+    """
+    try:
+        from importlib.resources import files
+
+        pkg_path = files("mmcp.infrastructure.installation.context-life-integration")
+        # MultiplexedPath doesn't have .exists() - use joinpath + resolve instead
+        skill_file = pkg_path.joinpath("SKILL.md").resolve()
+
+        if not skill_file.exists():
+            raise FileNotFoundError(
+                f"Bundled skill 'context-life-integration' is missing SKILL.md at {skill_file}"
+            )
+
+        # Return parent directory (the skill directory itself)
+        return skill_file.parent
+    except FileNotFoundError:
+        raise
+    except Exception as exc:
+        raise FileNotFoundError(
+            f"Bundled skill 'context-life-integration' not found in package.\n"
+            f"Error: {exc}\n\n"
+            "This may indicate the package was not built correctly.\n"
+            "Ensure [tool.setuptools.package-data] includes the skill directory."
+        )
+
+
+def copy_skill_to_opencode(home: Path) -> None:
+    """Copy context-life-integration skill to OpenCode skills directory.
+
+    Uses shutil.copytree with dirs_exist_ok=True so repeated runs overwrite
+    without error. Logs when skill is already present.
+    """
+    source = get_skill_source_dir()
+    dest = home / ".config" / "opencode" / "skills" / "context-life-integration"
+    dest.parent.mkdir(parents=True, exist_ok=True)
+    if dest.exists():
+        logger.info("OpenCode skill already present at %s — overwriting.", dest)
+    shutil.copytree(source, dest, dirs_exist_ok=True)
+
+
+def copy_skill_to_antigravity(home: Path) -> None:
+    """Copy context-life-integration skill to Antigravity skills directory.
+
+    Creates parent directories with mkdir(parents=True, exist_ok=True) before copy.
+    Uses shutil.copytree with dirs_exist_ok=True so repeated runs overwrite without error.
+    """
+    source = get_skill_source_dir()
+    dest = home / ".gemini" / "skills" / "context-life-integration"
+    dest.parent.mkdir(parents=True, exist_ok=True)
+    shutil.copytree(source, dest, dirs_exist_ok=True)
+
+
+def install_skill_for_target(target_key: str, home_dir: Path) -> None:
+    """Dispatch skill copy to the correct platform handler.
+
+    Raises FileNotFoundError if skill source cannot be located.
+    Raises ValueError for unknown targets.
+    VS Code is skipped — no skill system available.
+    """
+    if target_key == "opencode":
+        copy_skill_to_opencode(home_dir)
+    elif target_key == "antigravity":
+        copy_skill_to_antigravity(home_dir)
+    elif target_key == "vscode":
+        # VS Code has no skill system — MCP only
+        pass
+    else:
+        raise ValueError(f"Unknown installation target: {target_key}")
+
+
+def verify_install(target_key: str, home_dir: Path) -> tuple[bool, bool, str]:
+    """Check that installation succeeded for the given target.
+
+    Returns (mcp_ok, skill_ok, message):
+    - mcp_ok: MCP entry exists in platform config
+    - skill_ok: skill directory exists (True for VS Code since no skill needed)
+    - message: human-readable status line
+    """
+    target = get_target(target_key)
+    config_path = target.path_resolver(home_dir)
+    mcp_ok = config_path.exists() and _read_json_object(config_path) != {}
+
+    if target_key == "vscode":
+        return (mcp_ok, True, "VS Code MCP configured (no skill system).")
+
+    skill_dest = None
+    if target_key == "opencode":
+        skill_dest = home_dir / ".config" / "opencode" / "skills" / "context-life-integration"
+    elif target_key == "antigravity":
+        skill_dest = home_dir / ".gemini" / "skills" / "context-life-integration"
+
+    skill_ok = skill_dest is not None and skill_dest.exists()
+
+    if mcp_ok and skill_ok:
+        return (True, True, f"{target.label}: MCP and skill installed.")
+    elif mcp_ok and not skill_ok:
+        return (True, False, f"{target.label}: MCP OK, skill missing.")
+    else:
+        return (False, False, f"{target.label}: MCP config missing.")
+
+
 def install_context_life(target_key: str, home_dir: str | Path | None = None) -> InstallResult:
     home = Path(home_dir) if home_dir is not None else Path.home()
     target = get_target(target_key)
     path = target.path_resolver(home)
     base = _read_json_object(path)
     merged = _deep_merge(base, target.overlay)
+
+    # Always try to copy skill if platform supports it, even when MCP config unchanged
+    skill_changed = False
+    try:
+        install_skill_for_target(target_key, home)
+        skill_changed = True
+    except Exception as exc:
+        logger.warning("Skill copy failed for %s: %s", target_key, exc)
 
     if base == merged:
         return InstallResult(key=target.key, label=target.label, path=path, changed=False)
