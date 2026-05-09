@@ -183,10 +183,11 @@ def test_verify_install_vscode_no_skill_check(
 # Phase 4 — TUI menu regression
 # ---------------------------------------------------------------------------
 
-def test_tui_menu_still_has_three_targets():
+def test_tui_menu_has_four_install_options():
     menu = cli._build_install_menu()
-    assert [item.label for item in menu.items] == ["OpenCode", "Antigravity", "Visual Studio Code"]
-    assert len(menu.items) == 3
+    item_labels = [item.label for item in menu.items]
+    assert item_labels == ["OpenCode", "Antigravity", "Visual Studio Code", "Install context-life-advisor"]
+    assert len(menu.items) == 4
     assert all(item.keep_tui for item in menu.items)
 
 
@@ -213,6 +214,98 @@ def test_install_opencode_merges_only_context_life(tmp_path: Path):
         "command": ["context-life"],
         "enabled": True,
     }
+
+
+def test_install_opencode_also_creates_advisor_prompt(tmp_path: Path):
+    """install_context_life('opencode') should create the advisor prompt file."""
+    config_path = tmp_path / ".config" / "opencode" / "opencode.json"
+    config_path.parent.mkdir(parents=True)
+    config_path.write_text('{"mcp": {}}', encoding="utf-8")
+
+    install_context_life("opencode", home_dir=tmp_path)
+
+    advisor_prompt = tmp_path / ".config" / "opencode" / "prompts" / "context-life-advisor.md"
+    assert advisor_prompt.exists()
+    content = advisor_prompt.read_text(encoding="utf-8")
+    assert "# Context-Life Advisor" in content
+    assert "intercept_user_request" in content
+
+
+def test_install_opencode_adds_advisor_agent_entry(tmp_path: Path):
+    """install_context_life('opencode') should add context-life-advisor to agent dict."""
+    config_path = tmp_path / ".config" / "opencode" / "opencode.json"
+    config_path.parent.mkdir(parents=True)
+    config_path.write_text('{"agent": {"existing-agent": {}}}', encoding="utf-8")
+
+    install_context_life("opencode", home_dir=tmp_path)
+
+    data = json.loads(config_path.read_text(encoding="utf-8"))
+    assert "context-life-advisor" in data["agent"]
+    assert data["agent"]["context-life-advisor"]["mode"] == "subagent"
+    assert data["agent"]["context-life-advisor"]["hidden"] is True
+    # Existing agent should NOT be overwritten
+    assert "existing-agent" in data["agent"]
+
+
+def test_deep_merge_does_not_overwrite_existing_agents(tmp_path: Path):
+    """_deep_merge should append agents, not replace the agents array."""
+    from mmcp.infrastructure.installation.context_life_installer import _deep_merge
+
+    base = {"agent": {"gentle-orchestrator": {"mode": "primary"}, "existing": {"hidden": False}}}
+    overlay = {"agent": {"context-life-advisor": {"mode": "subagent"}}}
+
+    result = _deep_merge(base, overlay)
+
+    # Both agents should exist
+    assert "gentle-orchestrator" in result["agent"]
+    assert "context-life-advisor" in result["agent"]
+    # existing agent should still be there
+    assert "existing" in result["agent"]
+    # gentle-orchestrator should NOT be overwritten
+    assert result["agent"]["gentle-orchestrator"]["mode"] == "primary"
+
+
+def test_detect_stack_finds_gentle_ai(tmp_path: Path):
+    """detect_stack should find gentle-orchestrator in agents."""
+    from mmcp.infrastructure.installation.context_life_installer import detect_stack
+
+    config_path = tmp_path / ".config" / "opencode" / "opencode.json"
+    config_path.parent.mkdir(parents=True)
+    config_path.write_text(
+        '{"agent": {"gentle-orchestrator": {}}, "mcp": {"context-life": {}}}',
+        encoding="utf-8",
+    )
+
+    stack = detect_stack(tmp_path)
+
+    assert stack.has_gentle_ai is True
+
+
+def test_detect_stack_finds_engram(tmp_path: Path):
+    """detect_stack should find engram in mcp config."""
+    from mmcp.infrastructure.installation.context_life_installer import detect_stack
+
+    config_path = tmp_path / ".config" / "opencode" / "opencode.json"
+    config_path.parent.mkdir(parents=True)
+    config_path.write_text('{"mcp": {"engram": {}}}', encoding="utf-8")
+
+    stack = detect_stack(tmp_path)
+
+    assert stack.has_engram is True
+
+
+def test_detect_stack_returns_false_when_neither_present(tmp_path: Path):
+    """detect_stack should return False for both when no gentle-ai or engram."""
+    from mmcp.infrastructure.installation.context_life_installer import detect_stack
+
+    config_path = tmp_path / ".config" / "opencode" / "opencode.json"
+    config_path.parent.mkdir(parents=True)
+    config_path.write_text('{"mcp": {"context-life": {}}}', encoding="utf-8")
+
+    stack = detect_stack(tmp_path)
+
+    assert stack.has_gentle_ai is False
+    assert stack.has_engram is False
 
 
 def test_install_antigravity_keeps_existing_config(tmp_path: Path):

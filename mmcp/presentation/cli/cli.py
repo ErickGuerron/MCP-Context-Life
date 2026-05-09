@@ -1333,6 +1333,21 @@ def _install_context_life_and_return(target_key: str) -> MenuActionResult:
     return MenuActionResult(back_levels=1, notice=notice)
 
 
+def _install_context_life_advisor_and_return() -> MenuActionResult:
+    from mmcp.infrastructure.installation.context_life_installer import install_context_life_advisor
+
+    try:
+        install_context_life_advisor(Path.home())
+        notice = (
+            "[bold green]✓ context-life-advisor installed.[/]\n"
+            "[dim]Agent and prompt file created in ~/.config/opencode/[/]\n"
+            "[bold yellow]⚠ Close and reopen OpenCode to activate the advisor.[/]"
+        )
+    except Exception as exc:
+        notice = f"[bold red]✗ Installation failed:[/] {exc}"
+    return MenuActionResult(back_levels=1, notice=notice)
+
+
 def _build_install_menu() -> MenuScreen:
     """Submenu for adding Context-Life to supported tools."""
     return MenuScreen(
@@ -1358,6 +1373,12 @@ def _build_install_menu() -> MenuScreen:
                 "Visual Studio Code",
                 "Writes the user mcp.json using the current Python interpreter to avoid PATH issues.",
                 lambda: _install_context_life_and_return("vscode"),
+                keep_tui=True,
+            ),
+            MenuItem(
+                "Install context-life-advisor",
+                "Add the context-life-advisor sub-agent to OpenCode with stack-aware prompts.",
+                lambda: _install_context_life_advisor_and_return(),
                 keep_tui=True,
             ),
         ],

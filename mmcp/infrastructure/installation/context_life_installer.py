@@ -30,6 +30,12 @@ class InstallResult:
     changed: bool
 
 
+@dataclass
+class StackDetection:
+    has_gentle_ai: bool
+    has_engram: bool
+
+
 def _opencode_path(home: Path) -> Path:
     return home / ".config" / "opencode" / "opencode.json"
 
@@ -127,7 +133,6 @@ def get_skill_source_dir() -> Path:
         from importlib.resources import files
 
         pkg_path = files("mmcp.infrastructure.installation.context-life-integration")
-        # MultiplexedPath doesn't have .exists() - use joinpath + resolve instead
         skill_file = pkg_path.joinpath("SKILL.md").resolve()
 
         if not skill_file.exists():
@@ -135,7 +140,6 @@ def get_skill_source_dir() -> Path:
                 f"Bundled skill 'context-life-integration' is missing SKILL.md at {skill_file}"
             )
 
-        # Return parent directory (the skill directory itself)
         return skill_file.parent
     except FileNotFoundError:
         raise
@@ -149,11 +153,7 @@ def get_skill_source_dir() -> Path:
 
 
 def copy_skill_to_opencode(home: Path) -> None:
-    """Copy context-life-integration skill to OpenCode skills directory.
-
-    Uses shutil.copytree with dirs_exist_ok=True so repeated runs overwrite
-    without error. Logs when skill is already present.
-    """
+    """Copy context-life-integration skill to OpenCode skills directory."""
     source = get_skill_source_dir()
     dest = home / ".config" / "opencode" / "skills" / "context-life-integration"
     dest.parent.mkdir(parents=True, exist_ok=True)
@@ -163,11 +163,7 @@ def copy_skill_to_opencode(home: Path) -> None:
 
 
 def copy_skill_to_antigravity(home: Path) -> None:
-    """Copy context-life-integration skill to Antigravity skills directory.
-
-    Creates parent directories with mkdir(parents=True, exist_ok=True) before copy.
-    Uses shutil.copytree with dirs_exist_ok=True so repeated runs overwrite without error.
-    """
+    """Copy context-life-integration skill to Antigravity skills directory."""
     source = get_skill_source_dir()
     dest = home / ".gemini" / "skills" / "context-life-integration"
     dest.parent.mkdir(parents=True, exist_ok=True)
@@ -175,31 +171,19 @@ def copy_skill_to_antigravity(home: Path) -> None:
 
 
 def install_skill_for_target(target_key: str, home_dir: Path) -> None:
-    """Dispatch skill copy to the correct platform handler.
-
-    Raises FileNotFoundError if skill source cannot be located.
-    Raises ValueError for unknown targets.
-    VS Code is skipped — no skill system available.
-    """
+    """Dispatch skill copy to the correct platform handler."""
     if target_key == "opencode":
         copy_skill_to_opencode(home_dir)
     elif target_key == "antigravity":
         copy_skill_to_antigravity(home_dir)
     elif target_key == "vscode":
-        # VS Code has no skill system — MCP only
         pass
     else:
         raise ValueError(f"Unknown installation target: {target_key}")
 
 
 def verify_install(target_key: str, home_dir: Path) -> tuple[bool, bool, str]:
-    """Check that installation succeeded for the given target.
-
-    Returns (mcp_ok, skill_ok, message):
-    - mcp_ok: MCP entry exists in platform config
-    - skill_ok: skill directory exists (True for VS Code since no skill needed)
-    - message: human-readable status line
-    """
+    """Check that installation succeeded for the given target."""
     target = get_target(target_key)
     config_path = target.path_resolver(home_dir)
     mcp_ok = config_path.exists() and _read_json_object(config_path) != {}
@@ -221,6 +205,213 @@ def verify_install(target_key: str, home_dir: Path) -> tuple[bool, bool, str]:
         return (True, False, f"{target.label}: MCP OK, skill missing.")
     else:
         return (False, False, f"{target.label}: MCP config missing.")
+    has_gentle_ai: bool
+    has_engram: bool
+
+
+def detect_stack(home: Path) -> StackDetection:
+    """Detect which stack components are available."""
+    opencode_path = home / ".config" / "opencode" / "opencode.json"
+    config = _read_json_object(opencode_path)
+
+    has_gentle_ai = False
+    agents = config.get("agent", {})
+    if isinstance(agents, dict):
+        has_gentle_ai = "gentle-orchestrator" in agents or "sdd-orchestrator" in agents
+
+    has_engram = False
+    mcp = config.get("mcp", {})
+    if isinstance(mcp, dict):
+        has_engram = any("engram" in k.lower() for k in mcp.keys())
+
+    return StackDetection(has_gentle_ai=has_gentle_ai, has_engram=has_engram)
+
+
+def _get_advisor_prompt_content(stack: StackDetection) -> str:
+    """Generate advisor prompt based on detected stack."""
+    base = """# Context-Life Advisor
+
+You are the `context-life-advisor` sub-agent. Your role is to intercept and optimize
+context before the orchestrator begins working on a task.
+
+## Workflow
+
+1. Receive a raw user request from the orchestrator
+"""
+
+    if stack.has_engram:
+        base += """2. Check Engram for conflicting past decisions:
+   - Call: engram/mem_search with query about past decisions related to the request
+   - If contradiction found → elevate to CRITICAL immediately (skip step 3)
+3. If no contradiction, run D4 classification
+
+"""
+    else:
+        base += """2. Run D4 classification by calling intercept_user_request
+
+"""
+
+    base += """3. Call `intercept_user_request` via bash:
+   ```
+   python -m mmcp intercept_user_request "YOUR_RAW_REQUEST_HERE"
+   ```
+4. Parse the JSON response — extract the `d4` object (ContextPack):
+   - `d4.state`: LIGHT | REQUIRED | CRITICAL
+   - `d4.confidence`: float
+   - `d4.project_context`: {stack, architecture, testing, package_manager}
+   - `d4.files`: {explicit: [], inferred: []}
+   - `d4.constraints`: list
+   - `d4.missing_context`: list
+   - `d4.next_action`: string
+   - `d4.halt`: object with conflict details if CRITICAL
+
+5. Based on `d4.state`, determine context budget:
+   - LIGHT = small budget (min tokens to validate paths)
+   - REQUIRED = medium (search for missing pieces)
+   - CRITICAL = tiny (halt only, no code generation)
+
+"""
+
+    if stack.has_engram:
+        base += """## D4 History Awareness (Engram)
+If Engram check found a contradiction, format CRITICAL output with:
+- The conflicting past decision
+- The new request
+- Question: "¿Deseas actualizar la decisión anterior o mantenerla?"
+
+"""
+
+    base += """## Output Format
+
+Return a Markdown report to the orchestrator:
+
+## Context Analysis
+
+**State**: [d4.state]
+**Confidence**: [d4.confidence]
+**Goal**: [extracted from request]
+
+### Project Context
+- Stack: [d4.project_context.stack]
+- Architecture: [d4.project_context.architecture]
+- Testing: [d4.project_context.testing]
+- Package Manager: [d4.project_context.package_manager]
+
+### Files
+- Explicit: [d4.files.explicit]
+- Inferred: [d4.files.inferred]
+
+### Constraints
+[d4.constraints]
+
+### Missing Context
+[d4.missing_context]
+
+### Next Action
+[d4.next_action]
+
+## If CRITICAL (HALT)
+
+"""
+
+    if stack.has_gentle_ai and stack.has_engram:
+        base += """⚠️ **HALT REQUIRED** — Conflict with past decisions or detected contradiction
+- **Risk**: [d4.halt.risk]
+- **Detected Goal**: [d4.halt.detected_goal]
+- **Conflict**: [d4.halt.conflict]
+- **Required Decision**: [d4.halt.required_decision]
+- **Strict TDD Question**: ¿Deseas actualizar la suite de tests de integración para este cambio mayor?
+
+"""
+    else:
+        base += """⚠️ **HALT REQUIRED**
+- **Risk**: [d4.halt.risk]
+- **Detected Goal**: [d4.halt.detected_goal]
+- **Conflict**: [d4.halt.conflict]
+- **Required Decision**: [d4.halt.required_decision]
+
+"""
+
+    base += """## Important
+
+- Do NOT write code — only analyze and report
+- Do NOT delegate to other agents
+- Return the Markdown report to the orchestrator
+"""
+
+    return base
+
+
+def install_context_life_advisor(home: Path) -> dict[str, Any]:
+    """Install context-life-advisor sub-agent with stack-aware configuration.
+
+    Returns the updated config dict (in memory) so caller can use it.
+    Does NOT write to disk — caller is responsible for writing.
+    """
+    stack = detect_stack(home)
+
+    # 1. Create advisor prompt file
+    prompts_dir = home / ".config" / "opencode" / "prompts"
+    prompts_dir.mkdir(parents=True, exist_ok=True)
+    advisor_prompt_path = prompts_dir / "context-life-advisor.md"
+
+    content = _get_advisor_prompt_content(stack)
+    advisor_prompt_path.write_text(content, encoding="utf-8")
+
+    # 2. Add agent entry to opencode.json
+    opencode_path = home / ".config" / "opencode" / "opencode.json"
+    config = _read_json_object(opencode_path)
+
+    # Ensure agent dict exists
+    if "agent" not in config:
+        config["agent"] = {}
+
+    # Add context-life-advisor agent entry (idempotent — won't overwrite existing)
+    if "context-life-advisor" not in config["agent"]:
+        config["agent"]["context-life-advisor"] = {
+            "description": "Intercepts raw user requests to resolve project context and optimize context budgets",
+            "hidden": True,
+            "mode": "subagent",
+            "model": "ollama/qwen3:8b",
+            "prompt": str(advisor_prompt_path),
+            "tools": {
+                "bash": True,
+                "read": True,
+                "write": True
+            }
+        }
+
+    # 3. Update sdd-orchestrator.md ONLY if gentle-ai detected
+    if stack.has_gentle_ai:
+        orchestrator_path = prompts_dir / "sdd" / "sdd-orchestrator.md"
+        if orchestrator_path.exists():
+            # Read current content
+            content = orchestrator_path.read_text(encoding="utf-8")
+
+            # Check if delegation to context-life-advisor already exists
+            if "context-life-advisor" not in content:
+                # Add delegation before the first SDD workflow section
+                insertion = """
+## Context-Life Advisor Integration [Auto-Installed]
+
+When a user request arrives, delegate to `context-life-advisor` FIRST to validate context:
+- If CRITICAL: HALT and ask user for clarification
+- If REQUIRED: Gather missing context before proceeding
+- If LIGHT: Proceed with the context provided
+
+To delegate:
+```
+task description="Analyze user request context" agent="context-life-advisor" prompt="[user's raw request]"
+```
+
+"""
+                # Insert after the "You are a COORDINATOR" line and before Delegation Rules
+                if "You are a COORDINATOR" in content:
+                    parts = content.split("You are a COORDINATOR", 1)
+                    content = parts[0] + "You are a COORDINATOR" + insertion + parts[1]
+                    orchestrator_path.write_text(content, encoding="utf-8")
+
+    return config
 
 
 def install_context_life(target_key: str, home_dir: str | Path | None = None) -> InstallResult:
@@ -237,6 +428,16 @@ def install_context_life(target_key: str, home_dir: str | Path | None = None) ->
         skill_changed = True
     except Exception as exc:
         logger.warning("Skill copy failed for %s: %s", target_key, exc)
+
+    # Install context-life-advisor sub-agent for opencode target
+    if target_key == "opencode":
+        advisor_config = install_context_life_advisor(home)
+        # Merge advisor agent entry into merged config so it gets written
+        if "agent" not in merged:
+            merged["agent"] = {}
+        for agent_name, agent_config in advisor_config.get("agent", {}).items():
+            if agent_name not in merged["agent"]:
+                merged["agent"][agent_name] = agent_config
 
     if base == merged:
         return InstallResult(key=target.key, label=target.label, path=path, changed=False)
@@ -364,9 +565,17 @@ def _strip_trailing_commas(raw: str) -> str:
 
 
 def _deep_merge(base: dict[str, Any], overlay: dict[str, Any]) -> dict[str, Any]:
+    """Deep merge with special handling for agents array."""
     result = dict(base)
     for key, value in overlay.items():
-        if isinstance(value, dict) and isinstance(result.get(key), dict):
+        if key == "agent" and isinstance(value, dict) and isinstance(result.get(key), dict):
+            # Agent-specific merge: append new agents, replacing existing by name
+            for agent_name, agent_config in value.items():
+                if agent_name in result[key]:
+                    # Don't overwrite existing agents
+                    continue
+                result[key][agent_name] = agent_config
+        elif isinstance(value, dict) and isinstance(result.get(key), dict):
             result[key] = _deep_merge(result[key], value)
         else:
             result[key] = value

@@ -99,7 +99,7 @@ def test_upgrade_shows_confirmation_before_install(monkeypatch):
     preview.print(upgrade._build_confirmation_panel("0.4.0", "v0.7.1", "https://example.test/release", False))
     preview_text = preview.export_text().lower()
 
-    assert "¿querés actualizar el mcp?" in preview_text
+    assert "update the mcp?" in preview_text
     assert "context-life 0.4.0 -> v0.7.1" in preview_text
     assert "enter: continue" in preview_text
     assert "esc/q: cancel" in preview_text
