@@ -131,6 +131,29 @@ def test_metrics_menu_groups_status_and_diagnostics():
     assert metrics_menu.items[2].submenu.content_builder is not None
 
 
+def test_short_menu_body_shrinks_to_content(monkeypatch):
+    original_panel = cli.Panel
+    captured = {}
+
+    def panel_spy(renderable, *args, **kwargs):
+        if kwargs.get("title") == "Short" and kwargs.get("subtitle") == "Use → or enter to select":
+            captured["height"] = kwargs.get("height")
+        return original_panel(renderable, *args, **kwargs)
+
+    monkeypatch.setattr(cli, "Panel", panel_spy)
+
+    screen = cli.MenuScreen(
+        title="Short",
+        subtitle="",
+        items=[cli.MenuItem("One", "Tiny item", action=lambda: None)],
+    )
+
+    _build_menu_panel(screen, "Main Menu  ›  Short")
+
+    assert captured["height"] is not None
+    assert captured["height"] < cli._menu_body_height()
+
+
 def test_move_menu_selection_clamps_at_bounds():
     menu = _build_metrics_menu()
 

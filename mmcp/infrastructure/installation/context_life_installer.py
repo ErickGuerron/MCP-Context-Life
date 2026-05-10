@@ -46,6 +46,44 @@ class LocalModel:
     full_name: str
 
 
+@dataclass(frozen=True, slots=True)
+class ProviderModel:
+    """A model configured for a specific OpenCode provider."""
+
+    provider: str
+    model_id: str
+    display_name: str
+    full_name: str
+    price_label: str = ""
+
+
+@dataclass(frozen=True, slots=True)
+class ZenModel:
+    """A model available via OpenCode Zen."""
+
+    model_id: str  # e.g. "opencode/qwen3:8b"
+    display_name: str  # e.g. "Qwen 3.6 Plus"
+    is_free: bool
+    description: str  # e.g. "Free for limited time"
+
+
+# OpenCode Zen curated models with pricing info
+ZEN_MODELS: list[ZenModel] = [
+    ZenModel(model_id="opencode/qwen3:8b", display_name="Qwen 3.6 Plus", is_free=False, description="General purpose coder"),
+    ZenModel(model_id="opencode/qwen3:4b", display_name="Qwen 3.4", is_free=False, description="Compact coder model"),
+    ZenModel(model_id="opencode/big-pickle", display_name="Big Pickle", is_free=True, description="Free - limited time"),
+    ZenModel(model_id="opencode/minimax-m2.7", display_name="MiniMax M2.7", is_free=False, description="High capability coder"),
+    ZenModel(model_id="opencode/minimax-m2.5", display_name="MiniMax M2.5", is_free=False, description="Mid-range coder"),
+    ZenModel(model_id="opencode/minimax-m2.5-free", display_name="MiniMax M2.5 Free", is_free=True, description="Free tier"),
+    ZenModel(model_id="opencode/glm-5", display_name="GLM 5", is_free=False, description="GLM latest"),
+    ZenModel(model_id="opencode/kimi-k2.6", display_name="Kimi K2.6", is_free=False, description="Kimi latest"),
+    ZenModel(model_id="opencode/kimi-k2.5", display_name="Kimi K2.5", is_free=False, description="Kimi previous version"),
+    ZenModel(model_id="opencode/ling-2.6-flash-free", display_name="Ling 2.6 Flash Free", is_free=True, description="Free input/output/cached"),
+    ZenModel(model_id="opencode/hy3-preview-free", display_name="Hy3 Preview Free", is_free=True, description="Free preview"),
+    ZenModel(model_id="opencode/nemotron-3-super-free", display_name="Nemotron 3 Super Free", is_free=True, description="Free input/output/cached"),
+]
+
+
 def _get_auth_providers(home: Path) -> list[ConnectedProvider]:
     """Read auth.json and return connected providers."""
     auth_path = home / ".local" / "share" / "opencode" / "auth.json"
@@ -96,6 +134,78 @@ def _get_local_models(home: Path) -> list[LocalModel]:
                         )
 
     return local_models
+
+
+def _get_provider_models(home: Path, provider_name: str) -> list[ProviderModel]:
+    """Read OpenCode's cached model inventory for a specific provider.
+
+    Gentle AI treats `~/.cache/opencode/models.json` as the source of truth for
+    available providers/models. If the cache is missing, the TUI should degrade
+    gracefully instead of trying to hit OpenCode live during menu construction.
+    """
+
+    def format_cost(cost: Any) -> str:
+        if not isinstance(cost, dict):
+            return ""
+        input_cost = cost.get("input")
+        output_cost = cost.get("output")
+        cache_read = cost.get("cache_read")
+        cache_write = cost.get("cache_write")
+
+        parts: list[str] = []
+        if isinstance(input_cost, (int, float)):
+            parts.append(f"in {input_cost:g}")
+        if isinstance(output_cost, (int, float)):
+            parts.append(f"out {output_cost:g}")
+        if isinstance(cache_read, (int, float)) and isinstance(cache_write, (int, float)):
+            parts.append(f"cache {cache_read:g}/{cache_write:g}")
+        return " • ".join(parts)
+
+    cache_path = home / ".cache" / "opencode" / "models.json"
+    if not cache_path.exists():
+        return []
+
+    data = _read_json_object(cache_path)
+    provider_data = data.get(provider_name)
+    if not isinstance(provider_data, dict):
+        return []
+
+    models_data = provider_data.get("models", {})
+    if not isinstance(models_data, dict):
+        return []
+
+    provider_label = str(provider_data.get("name", provider_name) or provider_name)
+    models: list[ProviderModel] = []
+    for model_id, model_data in models_data.items():
+        if not isinstance(model_data, dict):
+            continue
+        display_name = str(model_data.get("name", model_id) or model_id)
+        price_label = format_cost(model_data.get("cost"))
+        models.append(
+            ProviderModel(
+                provider=provider_name,
+                model_id=model_id,
+                display_name=display_name,
+                full_name=f"{provider_name}/{model_id}",
+                price_label=price_label,
+            )
+        )
+
+    # Keep provider label available for future UI tweaks via model metadata.
+    _ = provider_label
+    return models
+
+
+def _is_zen_connected(home: Path) -> bool:
+    """Check if OpenCode Zen is connected via auth.json."""
+    auth_path = home / ".local" / "share" / "opencode" / "auth.json"
+    if not auth_path.exists():
+        return False
+    try:
+        auth_data = json.loads(auth_path.read_text(encoding="utf-8"))
+        return "opencode-zen" in auth_data or "zen" in auth_data
+    except (json.JSONDecodeError, OSError):
+        return False
 
 
 @dataclass
@@ -483,6 +593,40 @@ task description="Analyze user request context" agent="context-life-advisor" pro
                     orchestrator_path.write_text(content, encoding="utf-8")
 
     return config
+
+
+def update_context_life_advisor_model(home: Path, model: str) -> dict[str, Any]:
+    """Update the configured model for context-life-advisor.
+
+    If the advisor is not installed yet, this falls back to the install flow so
+    the agent entry exists before the model is changed.
+    """
+    opencode_path = home / ".config" / "opencode" / "opencode.json"
+    config = _read_json_object(opencode_path)
+
+    if "agent" not in config or not isinstance(config["agent"], dict):
+        return install_context_life_advisor(home, model=model)
+
+    agent = config["agent"]
+    if "context-life-advisor" not in agent or not isinstance(agent["context-life-advisor"], dict):
+        return install_context_life_advisor(home, model=model)
+
+    agent["context-life-advisor"]["model"] = model
+    return config
+
+
+def get_context_life_advisor_model(home: Path) -> str | None:
+    """Read the currently configured context-life-advisor model from opencode.json."""
+    opencode_path = home / ".config" / "opencode" / "opencode.json"
+    config = _read_json_object(opencode_path)
+    agent = config.get("agent")
+    if not isinstance(agent, dict):
+        return None
+    advisor = agent.get("context-life-advisor")
+    if not isinstance(advisor, dict):
+        return None
+    model = advisor.get("model")
+    return str(model) if isinstance(model, str) and model.strip() else None
 
 
 def write_advisor_config_to_opencode(home: Path, config: dict[str, Any]) -> None:

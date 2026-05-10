@@ -83,6 +83,7 @@ class MenuItem:
     description: str = ""
     action: Callable[[], object] | None = None
     submenu: MenuScreen | None = None
+    submenu_factory: Callable[[], MenuScreen] | None = None
     inline_value: Callable[[], str] | None = None
     keep_tui: bool = False
 
@@ -96,13 +97,13 @@ class MenuScreen:
     items: list[MenuItem]
     help_text: str = "↑/↓: navigate • →: select • ←: back • q: quit"
     selected: int = 0
+    scroll_offset: int = 0  # for scrolling long item lists
     empty_message: str = "No items available."
     content_builder: Callable[[], object] | None = None
     content_pages_builder: Callable[[], list[DetailPage]] | None = None
     notice: str | None = None
     notice_style: str = "green"
     page_index: int = 0
-    scroll_offset: int = 0
     _detail_pages_cache: list[DetailPage] | None = field(default=None, init=False, repr=False)
     _detail_line_cache: dict[tuple[int, int], list[str]] = field(default_factory=dict, init=False, repr=False)
 
@@ -134,6 +135,14 @@ def _current_warmup_mode_label() -> str:
     from mmcp.infrastructure.environment.config import get_config
 
     return _title_case_mode(get_config().rag_warmup_mode)
+
+
+def _current_advisor_model_label() -> str:
+    """Read the current context-life-advisor model for inline config labels."""
+    from mmcp.infrastructure.installation.context_life_installer import get_context_life_advisor_model
+
+    model = get_context_life_advisor_model(Path.home())
+    return model or "Not set"
 
 
 def _render_renderable_to_lines(renderable, width: int) -> list[str]:
@@ -391,16 +400,29 @@ def _clamp_menu_selection(screen: MenuScreen):
     """Keep menu selection inside current item bounds."""
     if not screen.items:
         screen.selected = 0
+        screen.scroll_offset = 0
         return
     screen.selected = max(0, min(screen.selected, len(screen.items) - 1))
+    # Clamp scroll so selected item is always visible
+    screen.scroll_offset = max(0, min(screen.scroll_offset, len(screen.items) - 1))
 
 
 def _move_menu_selection(screen: MenuScreen, delta: int):
-    """Move current selection within menu bounds."""
+    """Move current selection and auto-scroll to keep it visible."""
     if not screen.items:
         screen.selected = 0
+        screen.scroll_offset = 0
         return
-    screen.selected = max(0, min(screen.selected + delta, len(screen.items) - 1))
+    new_selected = max(0, min(screen.selected + delta, len(screen.items) - 1))
+    screen.selected = new_selected
+
+    # Auto-scroll: keep selection in the middle 60% of visible area
+    vis_start = screen.scroll_offset
+    vis_end = screen.scroll_offset + _menu_visible_height() - 1
+    if new_selected < vis_start:
+        screen.scroll_offset = new_selected
+    elif new_selected > vis_end:
+        screen.scroll_offset = new_selected - _menu_visible_height() + 1
 
 
 def _get_detail_pages(screen: MenuScreen) -> list[DetailPage]:
@@ -430,6 +452,63 @@ def _invalidate_screen_cache(screen: MenuScreen):
 def _detail_body_width() -> int:
     """Stable detail body width inside the centered layout."""
     return min(104, max(72, (CONSOLE.width or 120) - 8))
+
+
+def _menu_visible_height() -> int:
+    """Number of visible menu items in the windowed list."""
+    term_height = CONSOLE.height or 40
+    if _menu_chrome_is_compact():
+        available = term_height - 22
+        body_height = max(6, min(available, 10))
+        return max(1, (body_height - 1) // 3)
+
+    available = term_height - 16
+    body_height = max(8, min(available, 18))
+    return max(3, (body_height - 1) // 3)
+
+
+def _menu_body_height() -> int:
+    """Fixed body height for menu screens so the submenu never overflows."""
+    term_height = CONSOLE.height or 40
+    if _menu_chrome_is_compact():
+        available = term_height - 22
+        return max(6, min(available, 10))
+
+    available = term_height - 16
+    return max(8, min(available, 18))
+
+
+def _menu_body_height_for_content(content_height: int) -> int:
+    """Fit menu bodies to content while preserving the overflow ceiling."""
+    padding = 1 if _menu_chrome_is_compact() else 2
+    return min(_menu_body_height(), max(3, content_height + padding))
+
+
+def _menu_chrome_is_compact() -> bool:
+    """Use a tighter vertical chrome when the viewport is short."""
+    return (CONSOLE.height or 40) <= 32
+
+
+def _menu_header_renderable(path: str, subtitle: str, latest_version: str | None = None):
+    """Build the menu header using a compact fallback on short terminals."""
+    if _menu_chrome_is_compact():
+        header_lines = [f"[bold white]{path}[/]", f"[dim]{subtitle}[/]"]
+        if latest_version:
+            header_lines.extend([
+                "",
+                f"[bold yellow]New version available:[/] v{latest_version}",
+                "[dim]Open Config → Upgrade Context-Life to install it.[/]",
+            ])
+        return Text.from_markup("\n".join(header_lines))
+
+    return _build_tui_header(path, subtitle, latest_version)
+
+
+def _menu_footer_renderable(footer_text: str):
+    """Build the footer using a compact fallback on short terminals."""
+    if _menu_chrome_is_compact():
+        return Text(footer_text, style="dim")
+    return Panel(footer_text, border_style="dim", box=box.ROUNDED, padding=(0, 1))
 
 
 def _detail_footer_text(screen: MenuScreen, page_count: int) -> str:
@@ -477,18 +556,22 @@ def _resolve_detail_layout(screen: MenuScreen, path: str, latest_version: str | 
     pages = _get_detail_pages(screen)
     _clamp_detail_page(screen, len(pages))
     footer_text = _detail_footer_text(screen, len(pages))
-    footer = Panel(footer_text, border_style="dim", box=box.ROUNDED)
-    chrome = Group(
+    footer = _menu_footer_renderable(footer_text)
+    chrome_sections: list[object] = [
         Align.center(Text(BANNER, style="bold cyan")),
         Align.center(
             Text(f"Context-Life (CL) v{get_version()}  —  LLM Context Optimization MCP Server", style="bold white")
         ),
-        Text(""),
-        Align.center(_build_tui_header(path, screen.subtitle, latest_version)),
-        Text(""),
-        Text(""),
-        Align.center(footer),
-    )
+    ]
+    if not _menu_chrome_is_compact():
+        chrome_sections.append(Text(""))
+    chrome_sections.append(Align.center(_menu_header_renderable(path, screen.subtitle, latest_version)))
+    if not _menu_chrome_is_compact():
+        chrome_sections.append(Text(""))
+    if not _menu_chrome_is_compact():
+        chrome_sections.append(Text(""))
+    chrome_sections.append(Align.center(footer))
+    chrome = Group(*chrome_sections)
     available_body_height = max(5, term_height - _measure_renderable_height(chrome, term_width))
 
     if not pages:
@@ -564,6 +647,7 @@ def _build_tui_header(path: str, subtitle: str, latest_version: str | None = Non
         title="Context-Life",
         border_style="magenta",
         box=box.ROUNDED,
+        padding=(0, 1),
     )
 
     if not latest_version:
@@ -578,6 +662,7 @@ def _build_tui_header(path: str, subtitle: str, latest_version: str | None = Non
             title="Update",
             border_style="yellow",
             box=box.ROUNDED,
+            padding=(0, 1),
         ),
     )
 
@@ -642,21 +727,36 @@ def _build_menu_panel(screen: MenuScreen, path: str, latest_version: str | None 
         else:
             rows.append(Text(screen.empty_message, style="dim"))
     elif screen.items:
-        for index, item in enumerate(screen.items):
+        vis_height = _menu_visible_height()
+        row_budget = max(5, _menu_body_height() - 4)
+        # Windowed rendering: only show items in scroll window
+        start = screen.scroll_offset
+        end = min(start + vis_height, len(screen.items))
+        rows_used = 0
+        for index in range(start, end):
+            item = screen.items[index]
+            item_rows = 1 + (1 if item.description else 0)
+            if rows_used and rows_used + item_rows > row_budget:
+                break
             is_active = index == screen.selected
             pointer = "▶" if is_active else " "
             style = "bold black on cyan" if is_active else "white"
             label = f"{pointer} {_menu_item_display_label(item)}"
-            if item.submenu is not None:
+            if item.submenu is not None or item.submenu_factory is not None:
                 label = f"{label}  ›"
             rows.append(Text(label, style=style))
             if item.description:
                 desc_style = "cyan" if is_active else "dim"
                 rows.append(Text(f"    {item.description}", style=desc_style))
-            rows.append(Text(""))
+            rows_used += item_rows
+        # Scroll indicator if there are more items
+        total = len(screen.items)
+        if end < total:
+            if rows:
+                rows.append(Text(""))
+            rows.append(Text(f"  ↕ {end}/{total} items — keep navigating to see more", style="dim"))
     else:
         rows.append(Text(screen.empty_message, style="dim"))
-        rows.append(Text(""))
 
     body_width = _detail_body_width()
     is_detail_screen = screen.content_builder is not None or screen.content_pages_builder is not None
@@ -674,32 +774,38 @@ def _build_menu_panel(screen: MenuScreen, path: str, latest_version: str | None 
         )
         footer_text = _detail_footer_text(screen, len(_get_detail_pages(screen)))
     else:
+        body_renderable = Group(*rows)
+        body_height = _menu_body_height_for_content(_measure_renderable_height(body_renderable, body_width))
         body = Panel(
-            Group(*rows),
+            body_renderable,
             title=screen.title,
             subtitle="Use → or enter to select",
             border_style="cyan",
             box=box.ROUNDED,
             width=body_width,
+            height=body_height,
+            padding=(0, 1),
         )
         footer_text = screen.help_text
 
-    footer = Panel(footer_text, border_style="dim", box=box.ROUNDED)
+    footer = Panel(footer_text, border_style="dim", box=box.ROUNDED, padding=(0, 1))
 
     ver = get_version()
     banner_text = Text(BANNER, style="bold cyan")
     title_text = Text(f"Context-Life (CL) v{ver}  —  LLM Context Optimization MCP Server", style="bold white")
 
-    return Group(
-        Align.center(banner_text),
-        Align.center(title_text),
-        Text(""),
-        Align.center(_build_tui_header(path, screen.subtitle, latest_version)),
-        Text(""),
-        Align.center(body),
-        Text(""),
-        Align.center(footer),
-    )
+    chrome_sections: list[object] = [Align.center(banner_text), Align.center(title_text)]
+    if not _menu_chrome_is_compact():
+        chrome_sections.append(Text(""))
+    chrome_sections.append(Align.center(_build_tui_header(path, screen.subtitle, latest_version)))
+    if not _menu_chrome_is_compact():
+        chrome_sections.append(Text(""))
+    chrome_sections.append(Align.center(body))
+    if not _menu_chrome_is_compact():
+        chrome_sections.append(Text(""))
+    chrome_sections.append(Align.center(footer))
+
+    return Group(*chrome_sections)
 
 
 def _run_menu_action(
@@ -823,6 +929,8 @@ def _show_stateful_menu(root_screen: MenuScreen):
                 continue
 
             item = current.items[current.selected]
+            if item.submenu is None and item.submenu_factory is not None:
+                item.submenu = item.submenu_factory()
             if item.submenu is not None:
                 _clamp_menu_selection(item.submenu)
                 stack.append(item.submenu)
@@ -1004,6 +1112,12 @@ def _build_config_menu() -> MenuScreen:
                 "Install Context-Life",
                 "Add the context-life MCP entry to OpenCode, Antigravity, or Visual Studio Code.",
                 submenu=_build_install_menu(),
+            ),
+            MenuItem(
+                "Config Model",
+                "Change the model used by context-life-advisor from OpenCode cache.",
+                submenu_factory=_build_advisor_model_config_menu,
+                inline_value=_current_advisor_model_label,
             ),
             MenuItem(
                 "Upgrade Context-Life",
@@ -1333,119 +1447,225 @@ def _install_context_life_and_return(target_key: str) -> MenuActionResult:
     return MenuActionResult(back_levels=1, notice=notice)
 
 
-def _install_context_life_advisor_and_return() -> MenuActionResult:
+def _build_advisor_install_menu() -> MenuScreen:
+    """Submenu for context-life-advisor installation with provider and model selection."""
+    return _build_advisor_model_menu(
+        title="Install context-life-advisor",
+        subtitle="Select provider and model for the advisor sub-agent",
+        model_action=_install_advisor_with_model,
+        empty_label="No provider models found",
+        empty_description="OpenCode cache is missing or empty; run OpenCode models refresh first.",
+    )
+
+
+def _build_advisor_model_config_menu() -> MenuScreen:
+    """Submenu for changing the model used by context-life-advisor."""
+    return _build_advisor_model_menu(
+        title="Config Model",
+        subtitle="Change the model configured for context-life-advisor",
+        model_action=_configure_advisor_model,
+        empty_label="No provider models found",
+        empty_description="OpenCode cache is missing or empty; run OpenCode models refresh first.",
+    )
+
+
+def _build_advisor_model_menu(
+    *,
+    title: str,
+    subtitle: str,
+    model_action: Callable[[str], MenuActionResult],
+    empty_label: str,
+    empty_description: str,
+) -> MenuScreen:
+    """Build provider/model selection screens backed by the OpenCode cache."""
     from mmcp.infrastructure.installation.context_life_installer import (
+        ConnectedProvider,
+        LocalModel,
+        ZenModel,
+        ZEN_MODELS,
+        get_context_life_advisor_model,
         _get_auth_providers,
         _get_local_models,
+        _get_provider_models,
+        _is_zen_connected,
+    )
+
+    home = Path.home()
+    auth_providers = _get_auth_providers(home)
+    local_models = _get_local_models(home)
+    zen_connected = _is_zen_connected(home)
+    current_model = get_context_life_advisor_model(home)
+
+    def _is_current(model_name: str) -> bool:
+        return current_model is not None and model_name == current_model
+
+    def _label_with_current(label: str, model_name: str) -> str:
+        return f"✓ {label}" if _is_current(model_name) else label
+
+    def _model_item(model_full_name: str, label: str, description: str) -> MenuItem:
+        return MenuItem(
+            label=_label_with_current(label, model_full_name),
+            description=description + (" [current]" if _is_current(model_full_name) else ""),
+            action=lambda model=model_full_name: model_action(model),
+        )
+
+    def _provider_models_menu(provider_id: str, provider_label: str) -> MenuScreen:
+        provider_models = _get_provider_models(home, provider_id)
+        model_items: list[MenuItem] = []
+        for m in provider_models:
+            model_items.append(
+                _model_item(
+                    m.full_name,
+                    f"  {m.display_name}",
+                    f"{m.full_name}" + (f" • {m.price_label}" if m.price_label else ""),
+                )
+            )
+        if not model_items:
+            model_items.append(MenuItem(label=f"  {empty_label}", description=empty_description, action=None))
+        return MenuScreen(
+            title=f"Select {provider_label} Model",
+            subtitle="Models come from OpenCode cache (`~/.cache/opencode/models.json`)",
+            items=model_items,
+        )
+
+    items: list[MenuItem] = []
+
+    # Cloud Providers (from auth.json)
+    if auth_providers:
+        cloud_subitems: list[MenuItem] = []
+        for p in auth_providers:
+            cloud_subitems.append(
+                MenuItem(
+                    label=p.name,
+                    description=f"{p.id} — OpenCode cache models",
+                    submenu=_provider_models_menu(p.id, p.name),
+                )
+            )
+        items.append(
+            MenuItem(
+                label="Cloud Providers",
+                description=f"{len(auth_providers)} connected ({', '.join(p.name for p in auth_providers)})",
+                submenu=MenuScreen(
+                    title="Select Cloud Provider",
+                    subtitle="Choose a cloud provider to use for context-life-advisor",
+                    items=cloud_subitems,
+                ),
+            )
+        )
+
+    # OpenCode Zen — only show free models if not connected
+    zen_subitems: list[MenuItem] = []
+
+    if not zen_connected:
+        # Not connected: show only free models
+        free_models = [m for m in ZEN_MODELS if m.is_free]
+        if free_models:
+            zen_subitems.append(MenuItem(label="  ─ FREE MODELS ─", description="", action=None))
+            for m in free_models:
+                zen_subitems.append(
+                    MenuItem(
+                        label=_label_with_current(f"  {m.display_name}", m.model_id),
+                        description=f"Free — {m.description}" + (" [current]" if _is_current(m.model_id) else ""),
+                        action=lambda model=m.model_id: model_action(model),
+                    )
+                )
+        zen_subitems.append(
+            MenuItem(
+                label="  ⚠ Not connected — connect OpenCode Zen to unlock paid models",
+                description="OpenCode Settings → AI → OpenCode Zen",
+                action=None,
+            )
+        )
+    else:
+        # Connected: show all models grouped
+        free_models = [m for m in ZEN_MODELS if m.is_free]
+        paid_models = [m for m in ZEN_MODELS if not m.is_free]
+
+        if free_models:
+            zen_subitems.append(MenuItem(label="  ─ FREE MODELS ─", description="", action=None))
+            for m in free_models:
+                zen_subitems.append(
+                    MenuItem(
+                        label=_label_with_current(f"  {m.display_name}", m.model_id),
+                        description=f"Free — {m.description}" + (" [current]" if _is_current(m.model_id) else ""),
+                        action=lambda model=m.model_id: model_action(model),
+                    )
+                )
+
+        if paid_models:
+            zen_subitems.append(MenuItem(label="  ─ PAID MODELS ─", description="", action=None))
+            for m in paid_models:
+                zen_subitems.append(
+                    MenuItem(
+                        label=_label_with_current(f"  {m.display_name}", m.model_id),
+                        description=f"Paid — {m.description}" + (" [current]" if _is_current(m.model_id) else ""),
+                        action=lambda model=m.model_id: model_action(model),
+                    )
+                )
+
+    items.append(
+        MenuItem(
+            label="OpenCode Zen",
+            description=f"{len(ZEN_MODELS)} models available" + (" ✓ connected" if zen_connected else " ✗ not connected"),
+            submenu=MenuScreen(
+                title="Select OpenCode Zen Model",
+                subtitle="Curated models with pricing info" + (" ✓ connected" if zen_connected else " ✗ not connected — free only"),
+                items=zen_subitems,
+            ),
+        )
+    )
+
+    # Local Providers
+    if local_models:
+        local_subitems: list[MenuItem] = []
+        current_provider = None
+        for m in local_models:
+            if m.provider != current_provider:
+                current_provider = m.provider
+                local_subitems.append(
+                    MenuItem(label=f"  ─ {current_provider.upper()} ─", description="", action=None)
+                )
+            local_subitems.append(
+                MenuItem(
+                    label=_label_with_current(f"  {m.model_id}", m.full_name),
+                    description=m.full_name + (" [current]" if _is_current(m.full_name) else ""),
+                    action=lambda model=m.full_name: model_action(model),
+                )
+            )
+        items.append(
+            MenuItem(
+                label="Local Providers",
+                description=f"{len(local_models)} local models configured",
+            submenu=MenuScreen(
+                title="Select Local Model",
+                subtitle="Locally hosted models (e.g. Ollama)",
+                items=local_subitems,
+            ),
+        )
+    )
+
+    return MenuScreen(title=title, subtitle=subtitle, items=items)
+
+
+def _install_advisor_with_model(model: str) -> MenuActionResult:
+    """Install context-life-advisor with the selected model."""
+    from mmcp.infrastructure.installation.context_life_installer import (
         install_context_life_advisor,
         write_advisor_config_to_opencode,
     )
 
     try:
         home = Path.home()
-
-        # Get providers from auth.json (cloud connections)
-        auth_providers = _get_auth_providers(home)
-
-        # Get locally configured models (e.g. ollama)
-        local_models = _get_local_models(home)
-
-        if not auth_providers and not local_models:
-            return MenuActionResult(
-                back_levels=1,
-                notice=(
-                    "[bold red]✗ No providers found.[/]\n"
-                    "[dim]Connect a provider in OpenCode settings, or configure a local provider.[/]"
-                ),
-                notice_style="red",
-            )
-
-        # If only one option (cloud or local), auto-select
-        total_options = len(auth_providers) + len(local_models)
-        if total_options == 1:
-            if auth_providers:
-                selected_model = auth_providers[0].id  # cloud: just provider name, OpenCode decides model
-            else:
-                selected_model = local_models[0].full_name
-            config = install_context_life_advisor(home, model=selected_model)
-            write_advisor_config_to_opencode(home, config)
-            return MenuActionResult(
-                back_levels=1,
-                notice=(
-                    f"[bold green]✓ context-life-advisor installed with {selected_model}[/]\n"
-                    "[dim]Agent and prompt file created in ~/.config/opencode/[/]\n"
-                    "[bold yellow]⚠ Close and reopen OpenCode to activate the advisor.[/]"
-                ),
-            )
-
-        # Multiple options: show interactive selection
-        return _show_provider_selection_and_install(home, auth_providers, local_models)
-
-    except Exception as exc:
-        return MenuActionResult(
-            back_levels=1,
-            notice=f"[bold red]✗ Failed to read providers:[/] {exc}",
-            notice_style="red",
-        )
-
-
-def _show_provider_selection_and_install(
-    home: Path, auth_providers: list, local_models: list
-) -> MenuActionResult:
-    """Show provider/model selection grouped by type (cloud vs local) and install."""
-    from rich.prompt import Prompt
-
-    from mmcp.infrastructure.installation.context_life_installer import (
-        install_context_life_advisor,
-        write_advisor_config_to_opencode,
-    )
-
-    # Build display grouped by type
-    CONSOLE.print("\n[bold]Select provider/model for context-life-advisor:[/]\n")
-
-    idx = 1
-    option_map: dict[int, str] = {}
-
-    # Cloud providers (from auth.json)
-    if auth_providers:
-        CONSOLE.print("[bold cyan]━━ CLOUD PROVIDERS (connected via auth) ━━[/]")
-        for p in auth_providers:
-            CONSOLE.print(f"  [{idx}] {p.name} (cloud)")
-            option_map[idx] = p.id  # e.g. "openai" - OpenCode decides model
-            idx += 1
-        CONSOLE.print()
-
-    # Local models (from opencode.json provider config)
-    if local_models:
-        CONSOLE.print("[bold cyan]━━ LOCAL PROVIDERS ━━[/]")
-        for m in local_models:
-            CONSOLE.print(f"  [{idx}] {m.full_name} (local)")
-            option_map[idx] = m.full_name  # e.g. "ollama/qwen3:8b"
-            idx += 1
-        CONSOLE.print()
-
-    try:
-        choice = Prompt.ask("[bold]Enter number (or 'q' to cancel)[/]", default="1")
-        if choice.strip().lower() == "q":
-            return MenuActionResult(back_levels=1, notice="[dim]Cancelled.[/]", notice_style="yellow")
-
-        selected_idx = int(choice.strip())
-        selected_model = option_map.get(selected_idx)
-        if not selected_model:
-            return MenuActionResult(back_levels=1, notice="[bold red]✗ Invalid selection.[/]", notice_style="red")
-
-        config = install_context_life_advisor(home, model=selected_model)
+        config = install_context_life_advisor(home, model=model)
         write_advisor_config_to_opencode(home, config)
         return MenuActionResult(
-            back_levels=1,
+            back_levels=2,
             notice=(
-                f"[bold green]✓ context-life-advisor installed with {selected_model}[/]\n"
-                "[dim]Agent and prompt file created in ~/.config/opencode/[/]\n"
-                "[bold yellow]⚠ Close and reopen OpenCode to activate the advisor.[/]"
+                f"[bold green]✓ context-life-advisor installed[/]\n"
+                f"[dim]Model: {model}[/]\n"
+                "[bold yellow]⚠ Close and reopen OpenCode to activate.[/]"
             ),
         )
-    except ValueError:
-        return MenuActionResult(back_levels=1, notice="[bold red]✗ Invalid number.[/]", notice_style="red")
     except Exception as exc:
         return MenuActionResult(
             back_levels=1,
@@ -1454,17 +1674,65 @@ def _show_provider_selection_and_install(
         )
 
 
+def _configure_advisor_model(model: str) -> MenuActionResult:
+    """Update the configured model for context-life-advisor."""
+    from mmcp.infrastructure.installation.context_life_installer import (
+        update_context_life_advisor_model,
+        write_advisor_config_to_opencode,
+    )
+
+    try:
+        home = Path.home()
+        config = update_context_life_advisor_model(home, model=model)
+        write_advisor_config_to_opencode(home, config)
+        return MenuActionResult(
+            back_levels=2,
+            notice=(
+                f"[bold green]✓ context-life-advisor model updated[/]\n"
+                f"[dim]Model: {model}[/]"
+            ),
+        )
+    except Exception as exc:
+        return MenuActionResult(
+            back_levels=1,
+            notice=f"[bold red]✗ Model update failed:[/] {exc}",
+            notice_style="red",
+        )
+
+
+def _install_context_life_advisor_and_return() -> MenuActionResult:
+    """Launch the advisor installation via TUI submenu."""
+    raise NotImplementedError("Use TUI navigation")
+
+
 def _build_install_menu() -> MenuScreen:
     """Submenu for adding Context-Life to supported tools."""
+    opencode_submenu = MenuScreen(
+        title="OpenCode Setup",
+        subtitle="Install the MCP entry and advisor integration for OpenCode.",
+        items=[
+            MenuItem(
+                "Install context-life",
+                "Write the OpenCode MCP entry for context-life.",
+                lambda: _install_context_life_and_return("opencode"),
+                keep_tui=True,
+            ),
+            MenuItem(
+                "Install context-life-advisor",
+                "Add the context-life-advisor sub-agent and choose its model.",
+                submenu_factory=_build_advisor_install_menu,
+            ),
+        ],
+        help_text="←: back • q: quit",
+    )
     return MenuScreen(
         title="Config / Install",
         subtitle="Add only the Context-Life MCP entry to a supported client.",
         items=[
             MenuItem(
                 "OpenCode",
-                "Writes ~/.config/opencode/opencode.json with the context-life MCP entry.",
-                lambda: _install_context_life_and_return("opencode"),
-                keep_tui=True,
+                "OpenCode install flow: MCP entry + advisor integration.",
+                submenu=opencode_submenu,
             ),
             MenuItem(
                 "Antigravity",
@@ -1479,12 +1747,6 @@ def _build_install_menu() -> MenuScreen:
                 "Visual Studio Code",
                 "Writes the user mcp.json using the current Python interpreter to avoid PATH issues.",
                 lambda: _install_context_life_and_return("vscode"),
-                keep_tui=True,
-            ),
-            MenuItem(
-                "Install context-life-advisor",
-                "Add the context-life-advisor sub-agent to OpenCode with stack-aware prompts.",
-                lambda: _install_context_life_advisor_and_return(),
                 keep_tui=True,
             ),
         ],

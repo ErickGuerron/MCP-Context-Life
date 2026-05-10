@@ -192,12 +192,79 @@ def test_verify_install_vscode_no_skill_check(
 # ---------------------------------------------------------------------------
 
 
-def test_tui_menu_has_four_install_options():
+def test_tui_menu_has_three_install_options():
     menu = cli._build_install_menu()
     item_labels = [item.label for item in menu.items]
-    assert item_labels == ["OpenCode", "Antigravity", "Visual Studio Code", "Install context-life-advisor"]
-    assert len(menu.items) == 4
-    assert all(item.keep_tui for item in menu.items)
+    assert item_labels == ["OpenCode", "Antigravity", "Visual Studio Code"]
+    assert len(menu.items) == 3
+    assert menu.items[0].submenu is not None
+    assert menu.items[1].action is not None and menu.items[1].keep_tui
+    assert menu.items[2].action is not None and menu.items[2].keep_tui
+
+
+def test_opencode_install_menu_nests_advisor_install():
+    menu = cli._build_install_menu()
+    opencode_item = menu.items[0]
+    assert opencode_item.submenu is not None
+    nested_labels = [item.label for item in opencode_item.submenu.items]
+    assert nested_labels == ["Install context-life", "Install context-life-advisor"]
+    assert opencode_item.submenu.items[1].submenu is None
+    assert opencode_item.submenu.items[1].submenu_factory is not None
+    advisor_menu = opencode_item.submenu.items[1].submenu_factory()
+    assert advisor_menu.title == "Install context-life-advisor"
+
+
+def test_config_menu_exposes_model_config():
+    menu = cli._build_config_menu()
+    item_labels = [item.label for item in menu.items]
+    assert "Config Model" in item_labels
+    config_model = next(item for item in menu.items if item.label == "Config Model")
+    assert config_model.submenu is None
+    assert config_model.submenu_factory is not None
+
+
+def test_config_model_menu_marks_current_selection(tmp_path: Path, monkeypatch: MonkeyPatch):
+    auth_path = tmp_path / ".local" / "share" / "opencode" / "auth.json"
+    auth_path.parent.mkdir(parents=True)
+    auth_path.write_text('{"openai": {"type": "oauth"}}', encoding="utf-8")
+
+    cache_path = tmp_path / ".cache" / "opencode" / "models.json"
+    cache_path.parent.mkdir(parents=True)
+    cache_path.write_text(
+        '{"openai": {"name": "OpenAI", "models": {"gpt-5.4-mini": {"name": "GPT-5.4 mini", "cost": {"input": 0, "output": 0, "cache_read": 0, "cache_write": 0}}, "gpt-4.1": {"name": "GPT-4.1", "cost": {"input": 0, "output": 0, "cache_read": 0, "cache_write": 0}}}}}',
+        encoding="utf-8",
+    )
+    config_path = tmp_path / ".config" / "opencode" / "opencode.json"
+    config_path.parent.mkdir(parents=True)
+    config_path.write_text(
+        '{"agent": {"context-life-advisor": {"mode": "subagent", "model": "openai/gpt-5.4-mini"}}}',
+        encoding="utf-8",
+    )
+
+    monkeypatch.setattr(cli.Path, "home", lambda: tmp_path)
+
+    menu = cli._build_advisor_model_config_menu()
+    cloud_item = next(item for item in menu.items if item.label == "Cloud Providers")
+    provider_item = next(item for item in cloud_item.submenu.items if item.label == "Openai")
+    model_labels = [item.label for item in provider_item.submenu.items if item.action is not None]
+    assert model_labels[0].startswith("✓ ")
+    assert "GPT-5.4 mini" in model_labels[0]
+
+
+def test_menu_panel_does_not_overflow_viewport(monkeypatch: MonkeyPatch):
+    monkeypatch.setattr(cli.CONSOLE, "height", 28, raising=False)
+    monkeypatch.setattr(cli.CONSOLE, "width", 100, raising=False)
+    screen = cli.MenuScreen(
+        title="Scroll Test",
+        subtitle="Long list should stay inside the panel",
+        items=[
+            cli.MenuItem(label=f"Item {i}", description=f"Description {i}", action=lambda: None)
+            for i in range(20)
+        ],
+    )
+    renderable = cli._build_menu_panel(screen, "Main › Config", None)
+    lines = cli._render_renderable_to_lines(renderable, 100)
+    assert len(lines) <= 28
 
 
 # ---------------------------------------------------------------------------
@@ -255,6 +322,22 @@ def test_install_opencode_adds_advisor_agent_entry(tmp_path: Path):
     assert data["agent"]["context-life-advisor"]["hidden"] is True
     # Existing agent should NOT be overwritten
     assert "existing-agent" in data["agent"]
+
+
+def test_update_context_life_advisor_model_changes_existing_model(tmp_path: Path):
+    from mmcp.infrastructure.installation.context_life_installer import update_context_life_advisor_model
+
+    config_path = tmp_path / ".config" / "opencode" / "opencode.json"
+    config_path.parent.mkdir(parents=True)
+    config_path.write_text(
+        '{"agent": {"context-life-advisor": {"mode": "subagent", "model": "openai/gpt-5.4-mini", "hidden": true}}}',
+        encoding="utf-8",
+    )
+
+    data = update_context_life_advisor_model(tmp_path, "anthropic/claude-sonnet-4-5")
+
+    assert data["agent"]["context-life-advisor"]["model"] == "anthropic/claude-sonnet-4-5"
+    assert data["agent"]["context-life-advisor"]["mode"] == "subagent"
 
 
 def test_deep_merge_does_not_overwrite_existing_agents(tmp_path: Path):
@@ -376,6 +459,57 @@ def test_get_local_models_ignores_cloud_providers(tmp_path: Path):
 
     models = _get_local_models(tmp_path)
     assert models == []
+
+
+def test_get_provider_models_reads_opencode_cache(tmp_path: Path):
+    """_get_provider_models should read cloud models from OpenCode cache."""
+    from mmcp.infrastructure.installation.context_life_installer import _get_provider_models
+
+    cache_path = tmp_path / ".cache" / "opencode" / "models.json"
+    cache_path.parent.mkdir(parents=True)
+    cache_path.write_text(
+        '{"openai": {"name": "OpenAI", "models": {"gpt-5.4-mini": {"name": "GPT-5.4 mini", "cost": {"input": 0.1, "output": 0.2, "cache_read": 0.01, "cache_write": 0.02}}, "gpt-4.1": {"name": "GPT-4.1", "cost": {"input": 0, "output": 0, "cache_read": 0, "cache_write": 0}}}}, "anthropic": {"name": "Anthropic", "models": {"claude-sonnet-4-5": {"name": "Claude Sonnet 4.5", "cost": {"input": 3, "output": 15, "cache_read": 0.3, "cache_write": 3.75}}}}}',
+        encoding="utf-8",
+    )
+
+    models = _get_provider_models(tmp_path, "openai")
+
+    assert [m.model_id for m in models] == ["gpt-5.4-mini", "gpt-4.1"]
+    assert models[0].display_name == "GPT-5.4 mini"
+    assert models[0].full_name == "openai/gpt-5.4-mini"
+    assert models[0].price_label == "in 0.1 • out 0.2 • cache 0.01/0.02"
+    assert models[1].display_name == "GPT-4.1"
+
+
+def test_get_provider_models_returns_empty_when_cache_missing(tmp_path: Path):
+    from mmcp.infrastructure.installation.context_life_installer import _get_provider_models
+
+    assert _get_provider_models(tmp_path, "openai") == []
+
+
+def test_advisor_menu_cloud_provider_opens_model_submenu(tmp_path: Path, monkeypatch: MonkeyPatch):
+    """Cloud provider selection should open a model submenu sourced from opencode.json."""
+    auth_path = tmp_path / ".local" / "share" / "opencode" / "auth.json"
+    auth_path.parent.mkdir(parents=True)
+    auth_path.write_text('{"openai": {"type": "oauth"}}', encoding="utf-8")
+
+    cache_path = tmp_path / ".cache" / "opencode" / "models.json"
+    cache_path.parent.mkdir(parents=True)
+    cache_path.write_text(
+        '{"openai": {"name": "OpenAI", "models": {"gpt-5.4-mini": {"name": "GPT-5.4 mini", "cost": {"input": 0.1, "output": 0.2, "cache_read": 0.01, "cache_write": 0.02}}}}}',
+        encoding="utf-8",
+    )
+
+    monkeypatch.setattr(cli.Path, "home", lambda: tmp_path)
+
+    menu = cli._build_advisor_install_menu()
+    cloud_item = next(item for item in menu.items if item.label == "Cloud Providers")
+    assert cloud_item.submenu is not None
+
+    provider_item = next(item for item in cloud_item.submenu.items if item.label == "Openai")
+    assert provider_item.submenu is not None
+    model_labels = [item.label.strip() for item in provider_item.submenu.items if item.action is not None]
+    assert model_labels == ["GPT-5.4 mini"]
 
 
 def test_get_local_models_returns_empty_when_no_provider(tmp_path: Path):
