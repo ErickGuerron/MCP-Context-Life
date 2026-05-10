@@ -318,40 +318,75 @@ def test_detect_stack_returns_false_when_neither_present(tmp_path: Path):
     assert stack.has_engram is False
 
 
-def test_get_available_models_parses_provider_config(tmp_path: Path):
-    """_get_available_models should extract models from provider config."""
-    from mmcp.infrastructure.installation.context_life_installer import _get_available_models
+def test_get_auth_providers_reads_auth_json(tmp_path: Path):
+    """_get_auth_providers should read providers from auth.json."""
+    from mmcp.infrastructure.installation.context_life_installer import _get_auth_providers
+
+    auth_path = tmp_path / ".local" / "share" / "opencode" / "auth.json"
+    auth_path.parent.mkdir(parents=True)
+    auth_path.write_text(
+        '{"openai": {"type": "oauth"}, "anthropic": {"type": "api_key"}}',
+        encoding="utf-8",
+    )
+
+    providers = _get_auth_providers(tmp_path)
+
+    assert len(providers) == 2
+    ids = {p.id for p in providers}
+    assert ids == {"openai", "anthropic"}
+
+
+def test_get_auth_providers_returns_empty_when_no_auth_json(tmp_path: Path):
+    """_get_auth_providers should return empty list when auth.json doesn't exist."""
+    from mmcp.infrastructure.installation.context_life_installer import _get_auth_providers
+
+    providers = _get_auth_providers(tmp_path)
+    assert providers == []
+
+
+def test_get_local_models_reads_opencode_json_local_provider(tmp_path: Path):
+    """_get_local_models should extract local models (localhost providers)."""
+    from mmcp.infrastructure.installation.context_life_installer import _get_local_models
 
     config_path = tmp_path / ".config" / "opencode" / "opencode.json"
     config_path.parent.mkdir(parents=True)
     config_path.write_text(
-        '{"provider": {"ollama": {"models": {"qwen3:8b": {}, "deepseek-r1:8b": {}}}, "openai": {"models": {"gpt-5.4-mini": {}}}}}',
+        '{"provider": {"ollama": {"options": {"baseURL": "http://localhost:11434/v1"}, "models": {"qwen3:8b": {}}}}}',
         encoding="utf-8",
     )
 
-    models = _get_available_models(tmp_path)
+    models = _get_local_models(tmp_path)
 
-    assert len(models) == 3
-    ollama_models = [m for m in models if m.provider == "ollama"]
-    openai_models = [m for m in models if m.provider == "openai"]
-
-    assert len(ollama_models) == 2
-    assert len(openai_models) == 1
-
-    assert ollama_models[0].full_name == "ollama/qwen3:8b"
-    assert openai_models[0].full_name == "openai/gpt-5.4-mini"
+    assert len(models) == 1
+    assert models[0].provider == "ollama"
+    assert models[0].model_id == "qwen3:8b"
+    assert models[0].full_name == "ollama/qwen3:8b"
 
 
-def test_get_available_models_returns_empty_when_no_provider(tmp_path: Path):
-    """_get_available_models should return empty list when no provider configured."""
-    from mmcp.infrastructure.installation.context_life_installer import _get_available_models
+def test_get_local_models_ignores_cloud_providers(tmp_path: Path):
+    """_get_local_models should ignore non-localhost providers."""
+    from mmcp.infrastructure.installation.context_life_installer import _get_local_models
+
+    config_path = tmp_path / ".config" / "opencode" / "opencode.json"
+    config_path.parent.mkdir(parents=True)
+    config_path.write_text(
+        '{"provider": {"openai": {"options": {"baseURL": "https://api.openai.com/v1"}, "models": {"gpt-5.4-mini": {}}}}}',
+        encoding="utf-8",
+    )
+
+    models = _get_local_models(tmp_path)
+    assert models == []
+
+
+def test_get_local_models_returns_empty_when_no_provider(tmp_path: Path):
+    """_get_local_models should return empty list when no provider configured."""
+    from mmcp.infrastructure.installation.context_life_installer import _get_local_models
 
     config_path = tmp_path / ".config" / "opencode" / "opencode.json"
     config_path.parent.mkdir(parents=True)
     config_path.write_text('{"agent": {}}', encoding="utf-8")
 
-    models = _get_available_models(tmp_path)
-
+    models = _get_local_models(tmp_path)
     assert models == []
 
 

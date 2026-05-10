@@ -1335,29 +1335,38 @@ def _install_context_life_and_return(target_key: str) -> MenuActionResult:
 
 def _install_context_life_advisor_and_return() -> MenuActionResult:
     from mmcp.infrastructure.installation.context_life_installer import (
-        _get_available_models,
+        _get_auth_providers,
+        _get_local_models,
         install_context_life_advisor,
         write_advisor_config_to_opencode,
     )
 
     try:
         home = Path.home()
-        models = _get_available_models(home)
 
-        if not models:
+        # Get providers from auth.json (cloud connections)
+        auth_providers = _get_auth_providers(home)
+
+        # Get locally configured models (e.g. ollama)
+        local_models = _get_local_models(home)
+
+        if not auth_providers and not local_models:
             return MenuActionResult(
                 back_levels=1,
                 notice=(
-                    "[bold red]✗ No models found in opencode.json.[/]\n"
-                    "[dim]Configure providers first in OpenCode settings.[/]"
+                    "[bold red]✗ No providers found.[/]\n"
+                    "[dim]Connect a provider in OpenCode settings, or configure a local provider.[/]"
                 ),
                 notice_style="red",
             )
 
-        # Single provider: auto-select first model
-        providers = {m.provider for m in models}
-        if len(providers) == 1:
-            selected_model = models[0].full_name
+        # If only one option (cloud or local), auto-select
+        total_options = len(auth_providers) + len(local_models)
+        if total_options == 1:
+            if auth_providers:
+                selected_model = auth_providers[0].id  # cloud: just provider name, OpenCode decides model
+            else:
+                selected_model = local_models[0].full_name
             config = install_context_life_advisor(home, model=selected_model)
             write_advisor_config_to_opencode(home, config)
             return MenuActionResult(
@@ -1369,19 +1378,21 @@ def _install_context_life_advisor_and_return() -> MenuActionResult:
                 ),
             )
 
-        # Multiple providers: show interactive selection
-        return _show_model_selection_and_install(home, models)
+        # Multiple options: show interactive selection
+        return _show_provider_selection_and_install(home, auth_providers, local_models)
 
     except Exception as exc:
         return MenuActionResult(
             back_levels=1,
-            notice=f"[bold red]✗ Failed to read models:[/] {exc}",
+            notice=f"[bold red]✗ Failed to read providers:[/] {exc}",
             notice_style="red",
         )
 
 
-def _show_model_selection_and_install(home: Path, models: list) -> MenuActionResult:
-    """Show model selection grouped by provider and install with selected model."""
+def _show_provider_selection_and_install(
+    home: Path, auth_providers: list, local_models: list
+) -> MenuActionResult:
+    """Show provider/model selection grouped by type (cloud vs local) and install."""
     from rich.prompt import Prompt
 
     from mmcp.infrastructure.installation.context_life_installer import (
@@ -1389,22 +1400,27 @@ def _show_model_selection_and_install(home: Path, models: list) -> MenuActionRes
         write_advisor_config_to_opencode,
     )
 
-    # Group models by provider
-    provider_groups: dict[str, list] = {}
-    for m in models:
-        if m.provider not in provider_groups:
-            provider_groups[m.provider] = []
-        provider_groups[m.provider].append(m)
+    # Build display grouped by type
+    CONSOLE.print("\n[bold]Select provider/model for context-life-advisor:[/]\n")
 
-    # Build display
-    CONSOLE.print("\n[bold]Select model for context-life-advisor:[/]\n")
     idx = 1
     option_map: dict[int, str] = {}
-    for provider, provider_models in provider_groups.items():
-        CONSOLE.print(f"[bold cyan]{provider.upper()}:[/]")
-        for m in provider_models:
-            CONSOLE.print(f"  [{idx}] {m.full_name}")
-            option_map[idx] = m.full_name
+
+    # Cloud providers (from auth.json)
+    if auth_providers:
+        CONSOLE.print("[bold cyan]━━ CLOUD PROVIDERS (connected via auth) ━━[/]")
+        for p in auth_providers:
+            CONSOLE.print(f"  [{idx}] {p.name} (cloud)")
+            option_map[idx] = p.id  # e.g. "openai" - OpenCode decides model
+            idx += 1
+        CONSOLE.print()
+
+    # Local models (from opencode.json provider config)
+    if local_models:
+        CONSOLE.print("[bold cyan]━━ LOCAL PROVIDERS ━━[/]")
+        for m in local_models:
+            CONSOLE.print(f"  [{idx}] {m.full_name} (local)")
+            option_map[idx] = m.full_name  # e.g. "ollama/qwen3:8b"
             idx += 1
         CONSOLE.print()
 

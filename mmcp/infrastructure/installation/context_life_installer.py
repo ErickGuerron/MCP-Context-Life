@@ -30,38 +30,72 @@ class InstallResult:
 
 
 @dataclass(frozen=True, slots=True)
-class AvailableModel:
-    """A model available in the user's OpenCode configuration."""
+class ConnectedProvider:
+    """A provider the user has connected via auth.json (OAuth/token)."""
 
-    provider: str
+    id: str  # e.g. "openai", "anthropic", "google"
+    name: str  # display name if available
+
+
+@dataclass(frozen=True, slots=True)
+class LocalModel:
+    """A locally configured model (e.g. Ollama running on machine)."""
+
+    provider: str  # e.g. "ollama"
     model_id: str
-    full_name: str  # e.g. "ollama/qwen3:8b"
+    full_name: str
 
 
-def _get_available_models(home: Path) -> list[AvailableModel]:
-    """Read opencode.json and extract available models grouped by provider."""
+def _get_auth_providers(home: Path) -> list[ConnectedProvider]:
+    """Read auth.json and return connected providers."""
+    auth_path = home / ".local" / "share" / "opencode" / "auth.json"
+    if not auth_path.exists():
+        return []
+
+    try:
+        auth_data = json.loads(auth_path.read_text(encoding="utf-8"))
+        providers = []
+        for provider_id in auth_data.keys():
+            providers.append(ConnectedProvider(id=provider_id, name=provider_id.title()))
+        return providers
+    except (json.JSONDecodeError, OSError):
+        return []
+
+
+def _get_local_models(home: Path) -> list[LocalModel]:
+    """Read opencode.json provider config for local models (e.g. ollama)."""
     opencode_path = home / ".config" / "opencode" / "opencode.json"
     config = _read_json_object(opencode_path)
 
-    models: list[AvailableModel] = []
+    local_models: list[LocalModel] = []
     provider_config = config.get("provider", {})
 
     if isinstance(provider_config, dict):
         for provider_name, provider_data in provider_config.items():
             if not isinstance(provider_data, dict):
                 continue
-            provider_models = provider_data.get("models", {})
-            if isinstance(provider_models, dict):
-                for model_id in provider_models.keys():
-                    models.append(
-                        AvailableModel(
-                            provider=provider_name,
-                            model_id=model_id,
-                            full_name=f"{provider_name}/{model_id}",
-                        )
-                    )
+            # Only include providers that have locally hosted models
+            # (identified by having a base_url pointing to localhost)
+            options = provider_data.get("options", {})
+            # Handle both base_url and baseURL (opencode uses camelCase)
+            base_url = ""
+            if isinstance(options, dict):
+                base_url = options.get("base_url", options.get("baseURL", ""))
+            is_local = "localhost" in base_url or "127.0.0.1" in base_url
 
-    return models
+            if is_local:
+                provider_models = provider_data.get("models", {})
+                if isinstance(provider_models, dict):
+                    for model_id in provider_models.keys():
+                        local_models.append(
+                            LocalModel(
+                                provider=provider_name,
+                                model_id=model_id,
+                                full_name=f"{provider_name}/{model_id}",
+                            )
+                        )
+
+    return local_models
 
 
 @dataclass
