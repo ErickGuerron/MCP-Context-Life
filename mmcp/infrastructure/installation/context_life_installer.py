@@ -10,7 +10,6 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Callable
 
-
 logger = logging.getLogger(__name__)
 
 
@@ -136,9 +135,7 @@ def get_skill_source_dir() -> Path:
         skill_file = pkg_path.joinpath("SKILL.md").resolve()
 
         if not skill_file.exists():
-            raise FileNotFoundError(
-                f"Bundled skill 'context-life-integration' is missing SKILL.md at {skill_file}"
-            )
+            raise FileNotFoundError(f"Bundled skill 'context-life-integration' is missing SKILL.md at {skill_file}")
 
         return skill_file.parent
     except FileNotFoundError:
@@ -205,8 +202,6 @@ def verify_install(target_key: str, home_dir: Path) -> tuple[bool, bool, str]:
         return (True, False, f"{target.label}: MCP OK, skill missing.")
     else:
         return (False, False, f"{target.label}: MCP config missing.")
-    has_gentle_ai: bool
-    has_engram: bool
 
 
 def detect_stack(home: Path) -> StackDetection:
@@ -374,11 +369,7 @@ def install_context_life_advisor(home: Path) -> dict[str, Any]:
             "mode": "subagent",
             "model": "ollama/qwen3:8b",
             "prompt": str(advisor_prompt_path),
-            "tools": {
-                "bash": True,
-                "read": True,
-                "write": True
-            }
+            "tools": {"bash": True, "read": True, "write": True},
         }
 
     # 3. Update sdd-orchestrator.md ONLY if gentle-ai detected
@@ -422,10 +413,8 @@ def install_context_life(target_key: str, home_dir: str | Path | None = None) ->
     merged = _deep_merge(base, target.overlay)
 
     # Always try to copy skill if platform supports it, even when MCP config unchanged
-    skill_changed = False
     try:
         install_skill_for_target(target_key, home)
-        skill_changed = True
     except Exception as exc:
         logger.warning("Skill copy failed for %s: %s", target_key, exc)
 
