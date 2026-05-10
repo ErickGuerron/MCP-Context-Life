@@ -2,13 +2,9 @@
 Tests for OrchestratorFeaturesConfig and [orchestrator] TOML loading.
 """
 
-import tempfile
 from pathlib import Path
 
-import pytest
-
 from mmcp.infrastructure.environment.config import (
-    CLConfig,
     OrchestratorFeaturesConfig,
     load_config,
 )
@@ -93,7 +89,8 @@ class TestOrchestratorTomlLoading:
         """Config should read [orchestrator.features] section."""
         config_path = tmp_path / "config.toml"
         config_path.write_text(
-            '[orchestrator]\nmode = "gentle-ai"\n\n[orchestrator.features]\nengram = true\nsdd = true\nskills = false\nagents = false\n',
+            '[orchestrator]\nmode = "gentle-ai"\n\n[orchestrator.features]\n'
+            "engram = true\nsdd = true\nskills = false\nagents = false\n",
             encoding="utf-8",
         )
 

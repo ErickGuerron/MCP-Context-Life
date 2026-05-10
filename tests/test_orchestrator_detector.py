@@ -18,11 +18,11 @@ import pytest
 from mmcp.infrastructure.environment.orchestrator_detector import (
     OrchestratorFeatures,
     OrchestratorInfo,
-    _ToolPatternTracker,
     _check_env_vars,
     _check_tool_pattern,
     _check_workspace_artifacts,
     _force_detection_from_mode,
+    _ToolPatternTracker,
     detect_orchestrator,
     get_orchestrator_info,
     reset_detection,

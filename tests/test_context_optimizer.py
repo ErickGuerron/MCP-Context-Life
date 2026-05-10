@@ -1,36 +1,36 @@
 """Tests for Context Optimization & HALT Governance Layer (D4)."""
 
 import json
+
 import pytest
 
 from mmcp.application.features.context.classifiers import (
     LIGHT_SIGNALS,
     REQUIRED_SIGNALS,
-    CRITICAL_TRIGGERS,
-    PromptState,
     ClassificationResult,
-    HaltDetail,
     ConflictDetector,
-    compute_confidence,
+    HaltDetail,
     PromptContextClassifier,
+    PromptState,
+    compute_confidence,
+)
+from mmcp.application.features.context.context_optimizer import (
+    ContextOptimizer,
+)
+from mmcp.application.features.context.pack_builder import (
+    ContextPack,
+    ContextPackBuilder,
 )
 from mmcp.application.features.context.resolver import (
     ContextBudgetManager,
     ProjectContext,
     ProjectContextResolver,
 )
-from mmcp.application.features.context.pack_builder import (
-    ContextPack,
-    ContextPackBuilder,
-)
-from mmcp.application.features.context.context_optimizer import (
-    ContextOptimizer,
-)
-
 
 # =============================================================================
 # SECTION 4.1: PromptContextClassifier + ConflictDetector
 # =============================================================================
+
 
 class TestComputeConfidence:
     """compute_confidence must be deterministic — same input → same output."""
@@ -185,6 +185,7 @@ class TestConflictDetector:
 # SECTION 4.2: ContextBudgetManager + ProjectContextResolver
 # =============================================================================
 
+
 class TestContextBudgetManager:
     """ContextBudgetManager maps state+confidence to token budgets."""
 
@@ -257,6 +258,7 @@ class TestProjectContextResolver:
 # =============================================================================
 # SECTION 4.3: ContextPackBuilder
 # =============================================================================
+
 
 class TestContextPack:
     """ContextPack is the final JSON output structure."""
@@ -380,6 +382,7 @@ class TestContextPackBuilder:
 # SECTION 4.4: ContextOptimizer (Integration)
 # =============================================================================
 
+
 class TestContextOptimizer:
     """ContextOptimizer runs the full flow: classify → detect conflicts → resolve → build."""
 
@@ -433,23 +436,24 @@ class TestContextOptimizer:
 # REGRESSION: Previous PR tests must still pass
 # =============================================================================
 
+
 class TestRegressionUpgradeCli:
     """Regression: ensure PR1+PR2 tests are not broken by D4 changes."""
 
     def test_import_context_module(self):
         """The context module must be importable without errors."""
         from mmcp.application.features.context import ContextService
+
         assert ContextService is not None
 
     def test_classifiers_importable(self):
         """New classifiers module must be importable."""
         from mmcp.application.features.context.classifiers import (
-            PromptContextClassifier,
             ConflictDetector,
+            PromptContextClassifier,
             PromptState,
-            HaltDetail,
-            ClassificationResult,
         )
+
         assert PromptContextClassifier is not None
         assert ConflictDetector is not None
         assert PromptState is not None

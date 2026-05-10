@@ -4,6 +4,7 @@ Tests for MCP status display (optimization_status enrichment).
 Verifies that when advisor_mode is True, the optimization_status field is appended
 to tool responses from: optimize_messages, cache_context, intercept_user_request.
 """
+
 import json
 
 import pytest
@@ -15,7 +16,6 @@ from mmcp.presentation.mcp.server import (
     optimize_messages,
 )
 
-
 # ============================================================
 # optimize_messages — optimization_status
 # ============================================================
@@ -26,17 +26,17 @@ def test_optimize_messages_includes_optimization_status_when_advisor_mode(monkey
     monkeypatch.setenv("GENTLE_AI_ACTIVE", "1")
     reset_detection()
 
-    messages = json.dumps([
-        {"role": "system", "content": "You are a helpful assistant."},
-        {"role": "user", "content": "Hello! " * 200},
-        {"role": "assistant", "content": "How can I help? " * 200},
-    ])
+    messages = json.dumps(
+        [
+            {"role": "system", "content": "You are a helpful assistant."},
+            {"role": "user", "content": "Hello! " * 200},
+            {"role": "assistant", "content": "How can I help? " * 200},
+        ]
+    )
 
     result = json.loads(optimize_messages(messages, max_tokens=500, strategy="smart"))
 
-    assert "optimization_status" in result, (
-        "optimization_status must be present when advisor_mode is True"
-    )
+    assert "optimization_status" in result, "optimization_status must be present when advisor_mode is True"
     status = result["optimization_status"]
     assert "strategy" in status
     assert "original_tokens" in status
@@ -60,24 +60,29 @@ def test_optimize_messages_no_optimization_status_when_advisor_mode_off(monkeypa
 
     # Force advisor_mode off by patching the orchestrator info directly
     from mmcp.infrastructure.environment import orchestrator_detector
-    monkeypatch.setattr(orchestrator_detector, "_cached_result", orchestrator_detector.OrchestratorInfo(
-        is_detected=False,
-        orchestrator_name="none",
-        detection_method="none",
-        features=[],
-        advisor_mode=False,
-    ))
 
-    messages = json.dumps([
-        {"role": "system", "content": "You are a helpful assistant."},
-        {"role": "user", "content": "Hello! " * 200},
-    ])
+    monkeypatch.setattr(
+        orchestrator_detector,
+        "_cached_result",
+        orchestrator_detector.OrchestratorInfo(
+            is_detected=False,
+            orchestrator_name="none",
+            detection_method="none",
+            features=[],
+            advisor_mode=False,
+        ),
+    )
+
+    messages = json.dumps(
+        [
+            {"role": "system", "content": "You are a helpful assistant."},
+            {"role": "user", "content": "Hello! " * 200},
+        ]
+    )
 
     result = json.loads(optimize_messages(messages, max_tokens=500, strategy="smart"))
 
-    assert "optimization_status" not in result, (
-        "optimization_status must NOT be present when advisor_mode is False"
-    )
+    assert "optimization_status" not in result, "optimization_status must NOT be present when advisor_mode is False"
 
 
 def test_optimize_messages_truncated_flag_reflects_resulting_json_size(monkeypatch):
@@ -93,10 +98,12 @@ def test_optimize_messages_truncated_flag_reflects_resulting_json_size(monkeypat
     reset_detection()
 
     # Input is large enough that trim MUST cut it down
-    messages = json.dumps([
-        {"role": "system", "content": "You are a helpful assistant."},
-        {"role": "user", "content": "x" * 5000},
-    ])
+    messages = json.dumps(
+        [
+            {"role": "system", "content": "You are a helpful assistant."},
+            {"role": "user", "content": "x" * 5000},
+        ]
+    )
 
     result = json.loads(optimize_messages(messages, max_tokens=500, strategy="smart"))
     status = result["optimization_status"]
@@ -105,8 +112,7 @@ def test_optimize_messages_truncated_flag_reflects_resulting_json_size(monkeypat
     resulting_json_len = len(json.dumps(result["messages"]))
 
     assert status["truncated"] == (resulting_json_len > 2048), (
-        f"truncated should be {resulting_json_len > 2048} "
-        f"(resulting JSON is {resulting_json_len} chars)"
+        f"truncated should be {resulting_json_len > 2048} (resulting JSON is {resulting_json_len} chars)"
     )
     assert len(status["resulting_prompt"]) <= 2048
 
@@ -116,17 +122,17 @@ def test_optimize_messages_truncated_false_when_short_prompt(monkeypatch):
     monkeypatch.setenv("GENTLE_AI_ACTIVE", "1")
     reset_detection()
 
-    messages = json.dumps([
-        {"role": "system", "content": "You are helpful."},
-        {"role": "user", "content": "Hi"},
-    ])
+    messages = json.dumps(
+        [
+            {"role": "system", "content": "You are helpful."},
+            {"role": "user", "content": "Hi"},
+        ]
+    )
 
     result = json.loads(optimize_messages(messages, max_tokens=500, strategy="smart"))
     status = result["optimization_status"]
 
-    assert status["truncated"] is False, (
-        "truncated should be False when resulting_prompt fits within 2048 chars"
-    )
+    assert status["truncated"] is False, "truncated should be False when resulting_prompt fits within 2048 chars"
 
 
 def test_optimize_messages_strategy_reflected_in_status(monkeypatch):
@@ -134,12 +140,14 @@ def test_optimize_messages_strategy_reflected_in_status(monkeypatch):
     monkeypatch.setenv("GENTLE_AI_ACTIVE", "1")
     reset_detection()
 
-    messages = json.dumps([
-        {"role": "system", "content": "policy"},
-        {"role": "user", "content": "question"},
-        {"role": "assistant", "content": "answer"},
-        {"role": "user", "content": "more"},
-    ])
+    messages = json.dumps(
+        [
+            {"role": "system", "content": "policy"},
+            {"role": "user", "content": "question"},
+            {"role": "assistant", "content": "answer"},
+            {"role": "user", "content": "more"},
+        ]
+    )
 
     for strategy in ("tail", "head", "smart"):
         result = json.loads(optimize_messages(messages, max_tokens=200, strategy=strategy))
@@ -157,17 +165,17 @@ def test_cache_context_includes_optimization_status_when_advisor_mode(monkeypatc
     monkeypatch.setenv("GENTLE_AI_ACTIVE", "1")
     reset_detection()
 
-    messages = json.dumps([
-        {"role": "system", "content": "You are a helpful assistant."},
-        {"role": "user", "content": "Hello! " * 200},
-        {"role": "assistant", "content": "How can I help? " * 200},
-    ])
+    messages = json.dumps(
+        [
+            {"role": "system", "content": "You are a helpful assistant."},
+            {"role": "user", "content": "Hello! " * 200},
+            {"role": "assistant", "content": "How can I help? " * 200},
+        ]
+    )
 
     result = json.loads(cache_context(messages))
 
-    assert "optimization_status" in result, (
-        "optimization_status must be present when advisor_mode is True"
-    )
+    assert "optimization_status" in result, "optimization_status must be present when advisor_mode is True"
     status = result["optimization_status"]
     assert "strategy" in status
     assert "original_tokens" in status
@@ -183,24 +191,29 @@ def test_cache_context_no_optimization_status_when_advisor_mode_off(monkeypatch)
     reset_detection()
 
     from mmcp.infrastructure.environment import orchestrator_detector
-    monkeypatch.setattr(orchestrator_detector, "_cached_result", orchestrator_detector.OrchestratorInfo(
-        is_detected=False,
-        orchestrator_name="none",
-        detection_method="none",
-        features=[],
-        advisor_mode=False,
-    ))
 
-    messages = json.dumps([
-        {"role": "system", "content": "You are a helpful assistant."},
-        {"role": "user", "content": "Hello! " * 200},
-    ])
+    monkeypatch.setattr(
+        orchestrator_detector,
+        "_cached_result",
+        orchestrator_detector.OrchestratorInfo(
+            is_detected=False,
+            orchestrator_name="none",
+            detection_method="none",
+            features=[],
+            advisor_mode=False,
+        ),
+    )
+
+    messages = json.dumps(
+        [
+            {"role": "system", "content": "You are a helpful assistant."},
+            {"role": "user", "content": "Hello! " * 200},
+        ]
+    )
 
     result = json.loads(cache_context(messages))
 
-    assert "optimization_status" not in result, (
-        "optimization_status must NOT be present when advisor_mode is False"
-    )
+    assert "optimization_status" not in result, "optimization_status must NOT be present when advisor_mode is False"
 
 
 def test_cache_context_truncated_false_when_short(monkeypatch):
@@ -208,10 +221,12 @@ def test_cache_context_truncated_false_when_short(monkeypatch):
     monkeypatch.setenv("GENTLE_AI_ACTIVE", "1")
     reset_detection()
 
-    messages = json.dumps([
-        {"role": "system", "content": "You are helpful."},
-        {"role": "user", "content": "Hi"},
-    ])
+    messages = json.dumps(
+        [
+            {"role": "system", "content": "You are helpful."},
+            {"role": "user", "content": "Hi"},
+        ]
+    )
 
     result = json.loads(cache_context(messages))
     status = result["optimization_status"]
@@ -317,16 +332,35 @@ def test_intercept_user_request_no_optimization_status(monkeypatch):
 # ============================================================
 
 
-@pytest.mark.parametrize("tool_fn,args", [
-    (optimize_messages, {"messages": json.dumps([
-        {"role": "system", "content": "You are helpful."},
-        {"role": "user", "content": "Hello! " * 100},
-    ]), "max_tokens": 500, "strategy": "smart"}),
-    (cache_context, {"messages": json.dumps([
-        {"role": "system", "content": "You are helpful."},
-        {"role": "user", "content": "Hello! " * 100},
-    ])}),
-])
+@pytest.mark.parametrize(
+    "tool_fn,args",
+    [
+        (
+            optimize_messages,
+            {
+                "messages": json.dumps(
+                    [
+                        {"role": "system", "content": "You are helpful."},
+                        {"role": "user", "content": "Hello! " * 100},
+                    ]
+                ),
+                "max_tokens": 500,
+                "strategy": "smart",
+            },
+        ),
+        (
+            cache_context,
+            {
+                "messages": json.dumps(
+                    [
+                        {"role": "system", "content": "You are helpful."},
+                        {"role": "user", "content": "Hello! " * 100},
+                    ]
+                )
+            },
+        ),
+    ],
+)
 def test_optimization_status_fields_present_and_types_correct(monkeypatch, tool_fn, args):
     """TRIANGULATE: all required fields present with correct types for optimize_messages and cache_context.
 

@@ -15,10 +15,10 @@ from mmcp.infrastructure.installation.context_life_installer import (
     verify_install,
 )
 
-
 # ---------------------------------------------------------------------------
 # Skill source fixtures
 # ---------------------------------------------------------------------------
+
 
 @pytest.fixture
 def bundled_skill(tmp_path: Path) -> Path:
@@ -46,6 +46,7 @@ def installer_with_skill(tmp_path: Path, monkeypatch: MonkeyPatch, bundled_skill
 # Phase 1 — Skill source resolution (bundled)
 # ---------------------------------------------------------------------------
 
+
 def test_get_skill_source_dir_returns_valid_path():
     """get_skill_source_dir returns a path where SKILL.md exists (real bundled skill)."""
     path = get_skill_source_dir()
@@ -71,6 +72,7 @@ def test_get_skill_source_dir_raises_when_bundled_missing(monkeypatch: MonkeyPat
 # Phase 2 — Skill copy implementation
 # ---------------------------------------------------------------------------
 
+
 def test_copy_skill_to_opencode(installer_with_skill: Path, bundled_skill: Path, tmp_path: Path):
     copy_skill_to_opencode(tmp_path)
 
@@ -80,8 +82,11 @@ def test_copy_skill_to_opencode(installer_with_skill: Path, bundled_skill: Path,
     assert (dest / "README.md").exists()
 
 
-def test_copy_skill_to_opencode_overwrites_existing(installer_with_skill: Path, bundled_skill: Path, tmp_path: Path, caplog):
+def test_copy_skill_to_opencode_overwrites_existing(
+    installer_with_skill: Path, bundled_skill: Path, tmp_path: Path, caplog
+):
     import logging
+
     caplog.set_level(logging.INFO)
 
     dest = tmp_path / ".config" / "opencode" / "skills" / "context-life-integration"
@@ -119,7 +124,9 @@ def test_install_skill_for_target_dispatches_opencode(installer_with_skill: Path
     assert (tmp_path / ".config" / "opencode" / "skills" / "context-life-integration").exists()
 
 
-def test_install_skill_for_target_dispatches_antigravity(installer_with_skill: Path, bundled_skill: Path, tmp_path: Path):
+def test_install_skill_for_target_dispatches_antigravity(
+    installer_with_skill: Path, bundled_skill: Path, tmp_path: Path
+):
     install_skill_for_target("antigravity", tmp_path)
     assert (tmp_path / ".gemini" / "skills" / "context-life-integration").exists()
 
@@ -137,6 +144,7 @@ def test_install_skill_for_target_unknown_raises(installer_with_skill: Path, bun
 # ---------------------------------------------------------------------------
 # Phase 3 — Verification
 # ---------------------------------------------------------------------------
+
 
 def test_verify_install_returns_true_when_skill_present(
     installer_with_skill: Path, bundled_skill: Path, tmp_path: Path
@@ -183,6 +191,7 @@ def test_verify_install_vscode_no_skill_check(
 # Phase 4 — TUI menu regression
 # ---------------------------------------------------------------------------
 
+
 def test_tui_menu_has_four_install_options():
     menu = cli._build_install_menu()
     item_labels = [item.label for item in menu.items]
@@ -194,6 +203,7 @@ def test_tui_menu_has_four_install_options():
 # ---------------------------------------------------------------------------
 # Original tests — preserved
 # ---------------------------------------------------------------------------
+
 
 def test_install_opencode_merges_only_context_life(tmp_path: Path):
     config_path = tmp_path / ".config" / "opencode" / "opencode.json"
@@ -335,3 +345,102 @@ def test_install_vscode_writes_context_life_only(monkeypatch: MonkeyPatch, tmp_p
         "command": sys.executable,
         "args": ["-m", "mmcp"],
     }
+
+
+def test_install_opencode_with_gentle_ai_patches_orchestrator(tmp_path: Path):
+    """install_context_life('opencode') should patch sdd-orchestrator.md when gentle-ai detected."""
+    config_path = tmp_path / ".config" / "opencode" / "opencode.json"
+    config_path.parent.mkdir(parents=True)
+    config_path.write_text('{"agent": {"gentle-orchestrator": {}}, "mcp": {}}', encoding="utf-8")
+
+    # Create existing orchestrator prompt with gentle-ai content
+    prompts_dir = tmp_path / ".config" / "opencode" / "prompts" / "sdd"
+    prompts_dir.mkdir(parents=True)
+    orch_path = prompts_dir / "sdd-orchestrator.md"
+    orch_path.write_text(
+        "You are a COORDINATOR\n\n## Delegation Rules\n",
+        encoding="utf-8",
+    )
+
+    install_context_life("opencode", home_dir=tmp_path)
+
+    # Orchestrator should be patched with advisor integration
+    content = orch_path.read_text(encoding="utf-8")
+    assert "context-life-advisor" in content
+    assert "Context-Life Advisor Integration" in content
+
+
+def test_install_opencode_without_gentle_ai_does_not_patch_orchestrator(tmp_path: Path):
+    """Without gentle-ai, orchestrator.md should NOT be patched."""
+    config_path = tmp_path / ".config" / "opencode" / "opencode.json"
+    config_path.parent.mkdir(parents=True)
+    # No gentle-orchestrator, no engram
+    config_path.write_text('{"agent": {}, "mcp": {"context-life": {}}}', encoding="utf-8")
+
+    # Create orchestrator that would be patched if detected
+    prompts_dir = tmp_path / ".config" / "opencode" / "prompts" / "sdd"
+    prompts_dir.mkdir(parents=True)
+    orch_path = prompts_dir / "sdd-orchestrator.md"
+    original = "You are a COORDINATOR\n\n## Delegation Rules\n"
+    orch_path.write_text(original, encoding="utf-8")
+
+    install_context_life("opencode", home_dir=tmp_path)
+
+    # Content should remain unchanged
+    content = orch_path.read_text(encoding="utf-8")
+    assert content == original
+    assert "Context-Life Advisor Integration" not in content
+
+
+def test_get_advisor_prompt_content_with_gentle_ai_and_engram(tmp_path: Path):
+    """Advisor prompt should include full D4 with history awareness when both detected."""
+    from mmcp.infrastructure.installation.context_life_installer import StackDetection, _get_advisor_prompt_content
+
+    stack = StackDetection(has_gentle_ai=True, has_engram=True)
+    content = _get_advisor_prompt_content(stack)
+
+    assert "D4 History Awareness (Engram)" in content
+    assert "Strict TDD Question" in content or "test suite" in content.lower()
+    assert "Check Engram for conflicting past decisions" in content
+
+
+def test_get_advisor_prompt_content_with_engram_only(tmp_path: Path):
+    """Advisor prompt should include Engram access but no TDD questions without gentle-ai."""
+    from mmcp.infrastructure.installation.context_life_installer import StackDetection, _get_advisor_prompt_content
+
+    stack = StackDetection(has_gentle_ai=False, has_engram=True)
+    content = _get_advisor_prompt_content(stack)
+
+    assert "Check Engram for conflicting past decisions" in content
+    assert "Strict TDD Question" not in content
+
+
+def test_get_advisor_prompt_content_without_engram(tmp_path: Path):
+    """Advisor prompt should skip history awareness when no engram."""
+    from mmcp.infrastructure.installation.context_life_installer import StackDetection, _get_advisor_prompt_content
+
+    stack = StackDetection(has_gentle_ai=False, has_engram=False)
+    content = _get_advisor_prompt_content(stack)
+
+    assert "Check Engram" not in content
+    assert "intercept_user_request" in content
+
+
+def test_install_context_life_advisor_idempotent(tmp_path: Path):
+    """Calling install twice via install_context_life should not duplicate the agent entry."""
+    config_path = tmp_path / ".config" / "opencode" / "opencode.json"
+    config_path.parent.mkdir(parents=True)
+    config_path.write_text("{}", encoding="utf-8")
+
+    # First call via install_context_life (which writes to disk)
+    install_context_life("opencode", home_dir=tmp_path)
+    data1 = json.loads(config_path.read_text(encoding="utf-8"))
+
+    # Second call (idempotent - should not duplicate)
+    install_context_life("opencode", home_dir=tmp_path)
+    data2 = json.loads(config_path.read_text(encoding="utf-8"))
+
+    # Should have exactly one context-life-advisor entry
+    assert "context-life-advisor" in data2["agent"]
+    assert len(data2["agent"]) == 1  # Only advisor, no duplicates
+    assert data1["agent"] == data2["agent"]  # Same content
