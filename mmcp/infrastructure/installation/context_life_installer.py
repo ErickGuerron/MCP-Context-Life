@@ -62,6 +62,12 @@ def _vscode_path(home: Path) -> Path:
     if sys_platform() == "darwin":
         return home / "Library" / "Application Support" / "Code" / "User" / "mcp.json"
 
+    # On Linux, respect APPDATA if set (e.g. CI test environment)
+    appdata = os.environ.get("APPDATA")
+    if appdata:
+        return Path(appdata) / "Code" / "User" / "mcp.json"
+
+    # Otherwise use XDG_CONFIG_HOME or ~/.config
     xdg = os.environ.get("XDG_CONFIG_HOME")
     base = Path(xdg) if xdg else home / ".config"
     return base / "Code" / "User" / "mcp.json"
