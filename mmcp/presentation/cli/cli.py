@@ -1334,18 +1334,108 @@ def _install_context_life_and_return(target_key: str) -> MenuActionResult:
 
 
 def _install_context_life_advisor_and_return() -> MenuActionResult:
-    from mmcp.infrastructure.installation.context_life_installer import install_context_life_advisor
+    from mmcp.infrastructure.installation.context_life_installer import (
+        _get_available_models,
+        install_context_life_advisor,
+        write_advisor_config_to_opencode,
+    )
 
     try:
-        install_context_life_advisor(Path.home())
-        notice = (
-            "[bold green]✓ context-life-advisor installed.[/]\n"
-            "[dim]Agent and prompt file created in ~/.config/opencode/[/]\n"
-            "[bold yellow]⚠ Close and reopen OpenCode to activate the advisor.[/]"
-        )
+        home = Path.home()
+        models = _get_available_models(home)
+
+        if not models:
+            return MenuActionResult(
+                back_levels=1,
+                notice=(
+                    "[bold red]✗ No models found in opencode.json.[/]\n"
+                    "[dim]Configure providers first in OpenCode settings.[/]"
+                ),
+                notice_style="red",
+            )
+
+        # Single provider: auto-select first model
+        providers = {m.provider for m in models}
+        if len(providers) == 1:
+            selected_model = models[0].full_name
+            config = install_context_life_advisor(home, model=selected_model)
+            write_advisor_config_to_opencode(home, config)
+            return MenuActionResult(
+                back_levels=1,
+                notice=(
+                    f"[bold green]✓ context-life-advisor installed with {selected_model}[/]\n"
+                    "[dim]Agent and prompt file created in ~/.config/opencode/[/]\n"
+                    "[bold yellow]⚠ Close and reopen OpenCode to activate the advisor.[/]"
+                ),
+            )
+
+        # Multiple providers: show interactive selection
+        return _show_model_selection_and_install(home, models)
+
     except Exception as exc:
-        notice = f"[bold red]✗ Installation failed:[/] {exc}"
-    return MenuActionResult(back_levels=1, notice=notice)
+        return MenuActionResult(
+            back_levels=1,
+            notice=f"[bold red]✗ Failed to read models:[/] {exc}",
+            notice_style="red",
+        )
+
+
+def _show_model_selection_and_install(home: Path, models: list) -> MenuActionResult:
+    """Show model selection grouped by provider and install with selected model."""
+    from rich.prompt import Prompt
+
+    from mmcp.infrastructure.installation.context_life_installer import (
+        install_context_life_advisor,
+        write_advisor_config_to_opencode,
+    )
+
+    # Group models by provider
+    provider_groups: dict[str, list] = {}
+    for m in models:
+        if m.provider not in provider_groups:
+            provider_groups[m.provider] = []
+        provider_groups[m.provider].append(m)
+
+    # Build display
+    CONSOLE.print("\n[bold]Select model for context-life-advisor:[/]\n")
+    idx = 1
+    option_map: dict[int, str] = {}
+    for provider, provider_models in provider_groups.items():
+        CONSOLE.print(f"[bold cyan]{provider.upper()}:[/]")
+        for m in provider_models:
+            CONSOLE.print(f"  [{idx}] {m.full_name}")
+            option_map[idx] = m.full_name
+            idx += 1
+        CONSOLE.print()
+
+    try:
+        choice = Prompt.ask("[bold]Enter number (or 'q' to cancel)[/]", default="1")
+        if choice.strip().lower() == "q":
+            return MenuActionResult(back_levels=1, notice="[dim]Cancelled.[/]", notice_style="yellow")
+
+        selected_idx = int(choice.strip())
+        selected_model = option_map.get(selected_idx)
+        if not selected_model:
+            return MenuActionResult(back_levels=1, notice="[bold red]✗ Invalid selection.[/]", notice_style="red")
+
+        config = install_context_life_advisor(home, model=selected_model)
+        write_advisor_config_to_opencode(home, config)
+        return MenuActionResult(
+            back_levels=1,
+            notice=(
+                f"[bold green]✓ context-life-advisor installed with {selected_model}[/]\n"
+                "[dim]Agent and prompt file created in ~/.config/opencode/[/]\n"
+                "[bold yellow]⚠ Close and reopen OpenCode to activate the advisor.[/]"
+            ),
+        )
+    except ValueError:
+        return MenuActionResult(back_levels=1, notice="[bold red]✗ Invalid number.[/]", notice_style="red")
+    except Exception as exc:
+        return MenuActionResult(
+            back_levels=1,
+            notice=f"[bold red]✗ Installation failed:[/] {exc}",
+            notice_style="red",
+        )
 
 
 def _build_install_menu() -> MenuScreen:

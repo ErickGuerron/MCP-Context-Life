@@ -29,6 +29,41 @@ class InstallResult:
     changed: bool
 
 
+@dataclass(frozen=True, slots=True)
+class AvailableModel:
+    """A model available in the user's OpenCode configuration."""
+
+    provider: str
+    model_id: str
+    full_name: str  # e.g. "ollama/qwen3:8b"
+
+
+def _get_available_models(home: Path) -> list[AvailableModel]:
+    """Read opencode.json and extract available models grouped by provider."""
+    opencode_path = home / ".config" / "opencode" / "opencode.json"
+    config = _read_json_object(opencode_path)
+
+    models: list[AvailableModel] = []
+    provider_config = config.get("provider", {})
+
+    if isinstance(provider_config, dict):
+        for provider_name, provider_data in provider_config.items():
+            if not isinstance(provider_data, dict):
+                continue
+            provider_models = provider_data.get("models", {})
+            if isinstance(provider_models, dict):
+                for model_id in provider_models.keys():
+                    models.append(
+                        AvailableModel(
+                            provider=provider_name,
+                            model_id=model_id,
+                            full_name=f"{provider_name}/{model_id}",
+                        )
+                    )
+
+    return models
+
+
 @dataclass
 class StackDetection:
     has_gentle_ai: bool
@@ -343,8 +378,13 @@ Return a Markdown report to the orchestrator:
     return base
 
 
-def install_context_life_advisor(home: Path) -> dict[str, Any]:
+def install_context_life_advisor(home: Path, model: str | None = None) -> dict[str, Any]:
     """Install context-life-advisor sub-agent with stack-aware configuration.
+
+    Args:
+        home: User's home directory (Path.home())
+        model: Model to use for the advisor (e.g. "ollama/qwen3:8b").
+               If None, must be selected interactively via the TUI.
 
     Returns the updated config dict (in memory) so caller can use it.
     Does NOT write to disk — caller is responsible for writing.
@@ -373,7 +413,7 @@ def install_context_life_advisor(home: Path) -> dict[str, Any]:
             "description": "Intercepts raw user requests to resolve project context and optimize context budgets",
             "hidden": True,
             "mode": "subagent",
-            "model": "ollama/qwen3:8b",
+            "model": model or "ollama/qwen3:8b",
             "prompt": str(advisor_prompt_path),
             "tools": {"bash": True, "read": True, "write": True},
         }
@@ -409,6 +449,12 @@ task description="Analyze user request context" agent="context-life-advisor" pro
                     orchestrator_path.write_text(content, encoding="utf-8")
 
     return config
+
+
+def write_advisor_config_to_opencode(home: Path, config: dict[str, Any]) -> None:
+    """Write the advisor agent config into opencode.json via atomic write."""
+    opencode_path = home / ".config" / "opencode" / "opencode.json"
+    _write_json_atomic(opencode_path, config)
 
 
 def install_context_life(target_key: str, home_dir: str | Path | None = None) -> InstallResult:

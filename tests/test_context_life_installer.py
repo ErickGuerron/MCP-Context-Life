@@ -310,12 +310,49 @@ def test_detect_stack_returns_false_when_neither_present(tmp_path: Path):
 
     config_path = tmp_path / ".config" / "opencode" / "opencode.json"
     config_path.parent.mkdir(parents=True)
-    config_path.write_text('{"mcp": {"context-life": {}}}', encoding="utf-8")
+    config_path.write_text('{"agent": {}, "mcp": {}}', encoding="utf-8")
 
     stack = detect_stack(tmp_path)
 
     assert stack.has_gentle_ai is False
     assert stack.has_engram is False
+
+
+def test_get_available_models_parses_provider_config(tmp_path: Path):
+    """_get_available_models should extract models from provider config."""
+    from mmcp.infrastructure.installation.context_life_installer import _get_available_models
+
+    config_path = tmp_path / ".config" / "opencode" / "opencode.json"
+    config_path.parent.mkdir(parents=True)
+    config_path.write_text(
+        '{"provider": {"ollama": {"models": {"qwen3:8b": {}, "deepseek-r1:8b": {}}}, "openai": {"models": {"gpt-5.4-mini": {}}}}}',
+        encoding="utf-8",
+    )
+
+    models = _get_available_models(tmp_path)
+
+    assert len(models) == 3
+    ollama_models = [m for m in models if m.provider == "ollama"]
+    openai_models = [m for m in models if m.provider == "openai"]
+
+    assert len(ollama_models) == 2
+    assert len(openai_models) == 1
+
+    assert ollama_models[0].full_name == "ollama/qwen3:8b"
+    assert openai_models[0].full_name == "openai/gpt-5.4-mini"
+
+
+def test_get_available_models_returns_empty_when_no_provider(tmp_path: Path):
+    """_get_available_models should return empty list when no provider configured."""
+    from mmcp.infrastructure.installation.context_life_installer import _get_available_models
+
+    config_path = tmp_path / ".config" / "opencode" / "opencode.json"
+    config_path.parent.mkdir(parents=True)
+    config_path.write_text('{"agent": {}}', encoding="utf-8")
+
+    models = _get_available_models(tmp_path)
+
+    assert models == []
 
 
 def test_install_antigravity_keeps_existing_config(tmp_path: Path):
