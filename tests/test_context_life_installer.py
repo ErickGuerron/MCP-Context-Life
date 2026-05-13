@@ -7,9 +7,9 @@ from _pytest.monkeypatch import MonkeyPatch
 
 import mmcp.presentation.cli.cli as cli
 from mmcp.infrastructure.installation.context_life_installer import (
-    copy_skill_to_antigravity,
-    copy_skill_to_opencode,
-    get_skill_source_dir,
+    copy_all_skills_to_antigravity,
+    copy_all_skills_to_opencode,
+    get_all_skill_source_dirs,
     install_context_life,
     install_skill_for_target,
     verify_install,
@@ -25,20 +25,23 @@ def bundled_skill(tmp_path: Path) -> Path:
     """Create a fake bundled skill source tree in a separate location from the test destination.
 
     Source goes to tmp_path/skill-source/ so it doesn't collide with destinations.
+    Creates both context-life-integration and context-life-governance.
     """
-    source_root = tmp_path / "skill-source" / "context-life-integration"
-    source_root.mkdir(parents=True)
-    (source_root / "SKILL.md").write_text("# Skill\nHello world.", encoding="utf-8")
-    (source_root / "README.md").write_text("Readme content.", encoding="utf-8")
+    source_root = tmp_path / "skill-source"
+    for skill_name in ("context-life-integration", "context-life-governance"):
+        skill_dir = source_root / skill_name
+        skill_dir.mkdir(parents=True)
+        (skill_dir / "SKILL.md").write_text(f"# {skill_name}\nHello world.", encoding="utf-8")
+        (skill_dir / "README.md").write_text("Readme content.", encoding="utf-8")
     return source_root
 
 
 @pytest.fixture
 def installer_with_skill(tmp_path: Path, monkeypatch: MonkeyPatch, bundled_skill: Path) -> Path:
-    """Patch get_skill_source_dir to return our fake bundled skill directory."""
+    """Patch get_all_skill_source_dirs to return our fake bundled skill directories."""
     import mmcp.infrastructure.installation.context_life_installer as installer_module
 
-    monkeypatch.setattr(installer_module, "get_skill_source_dir", lambda: bundled_skill)
+    monkeypatch.setattr(installer_module, "get_all_skill_source_dirs", lambda: [bundled_skill / "context-life-integration", bundled_skill / "context-life-governance"])
     return tmp_path
 
 
@@ -47,25 +50,27 @@ def installer_with_skill(tmp_path: Path, monkeypatch: MonkeyPatch, bundled_skill
 # ---------------------------------------------------------------------------
 
 
-def test_get_skill_source_dir_returns_valid_path():
-    """get_skill_source_dir returns a path where SKILL.md exists (real bundled skill)."""
-    path = get_skill_source_dir()
-    assert path.exists()
-    assert (path / "SKILL.md").exists()
+def test_get_all_skill_source_dirs_returns_valid_paths():
+    """get_all_skill_source_dirs returns paths where SKILL.md exists (real bundled skills)."""
+    paths = get_all_skill_source_dirs()
+    assert len(paths) >= 1
+    for path in paths:
+        assert path.exists()
+        assert (path / "SKILL.md").exists()
 
 
-def test_get_skill_source_dir_raises_when_bundled_missing(monkeypatch: MonkeyPatch):
-    """get_skill_source_dir raises FileNotFoundError when bundled skill is missing."""
+def test_get_all_skill_source_dirs_raises_when_bundled_missing(monkeypatch: MonkeyPatch):
+    """get_all_skill_source_dirs raises FileNotFoundError when bundled skills are missing."""
     import importlib.resources
 
     def fake_files(*args, **kwargs):
-        raise FileNotFoundError("Bundled skill not found in package")
+        raise FileNotFoundError("Bundled skills not found in package")
 
     monkeypatch.setattr(importlib.resources, "files", fake_files)
 
     with pytest.raises(FileNotFoundError) as exc_info:
-        get_skill_source_dir()
-    assert "Bundled skill" in str(exc_info.value)
+        get_all_skill_source_dirs()
+    assert "No bundled skills" in str(exc_info.value)
 
 
 # ---------------------------------------------------------------------------
@@ -73,62 +78,72 @@ def test_get_skill_source_dir_raises_when_bundled_missing(monkeypatch: MonkeyPat
 # ---------------------------------------------------------------------------
 
 
-def test_copy_skill_to_opencode(installer_with_skill: Path, bundled_skill: Path, tmp_path: Path):
-    copy_skill_to_opencode(tmp_path)
+def test_copy_all_skills_to_opencode(installer_with_skill: Path, bundled_skill: Path, tmp_path: Path):
+    copy_all_skills_to_opencode(tmp_path)
 
-    dest = tmp_path / ".config" / "opencode" / "skills" / "context-life-integration"
-    assert dest.exists()
-    assert (dest / "SKILL.md").exists()
-    assert (dest / "README.md").exists()
+    for skill_name in ("context-life-integration", "context-life-governance"):
+        dest = tmp_path / ".config" / "opencode" / "skills" / skill_name
+        assert dest.exists()
+        assert (dest / "SKILL.md").exists()
+        assert (dest / "README.md").exists()
 
 
-def test_copy_skill_to_opencode_overwrites_existing(
+def test_copy_all_skills_to_opencode_overwrites_existing(
     installer_with_skill: Path, bundled_skill: Path, tmp_path: Path, caplog
 ):
     import logging
 
     caplog.set_level(logging.INFO)
 
-    dest = tmp_path / ".config" / "opencode" / "skills" / "context-life-integration"
-    dest.mkdir(parents=True)
-    (dest / "SKILL.md").write_text("old", encoding="utf-8")
+    for skill_name in ("context-life-integration", "context-life-governance"):
+        dest = tmp_path / ".config" / "opencode" / "skills" / skill_name
+        dest.mkdir(parents=True)
+        (dest / "SKILL.md").write_text("old", encoding="utf-8")
 
-    copy_skill_to_opencode(tmp_path)
+    copy_all_skills_to_opencode(tmp_path)
 
-    assert (dest / "SKILL.md").read_text(encoding="utf-8") == "# Skill\nHello world."
+    for skill_name in ("context-life-integration", "context-life-governance"):
+        dest = tmp_path / ".config" / "opencode" / "skills" / skill_name
+        assert (dest / "SKILL.md").read_text(encoding="utf-8") == f"# {skill_name}\nHello world."
     assert any("already present" in record.message for record in caplog.records)
 
 
-def test_copy_skill_to_antigravity_creates_parent_dirs(installer_with_skill: Path, bundled_skill: Path, tmp_path: Path):
+def test_copy_all_skills_to_antigravity_creates_parent_dirs(installer_with_skill: Path, bundled_skill: Path, tmp_path: Path):
     assert not (tmp_path / ".gemini").exists()
-    copy_skill_to_antigravity(tmp_path)
+    copy_all_skills_to_antigravity(tmp_path)
 
-    dest = tmp_path / ".gemini" / "skills" / "context-life-integration"
-    assert dest.exists()
-    assert (dest / "SKILL.md").exists()
+    for skill_name in ("context-life-integration", "context-life-governance"):
+        dest = tmp_path / ".gemini" / "skills" / skill_name
+        assert dest.exists()
+        assert (dest / "SKILL.md").exists()
 
 
-def test_copy_skill_skips_existing(installer_with_skill: Path, bundled_skill: Path, tmp_path: Path):
-    dest = tmp_path / ".gemini" / "skills" / "context-life-integration"
-    dest.mkdir(parents=True)
-    (dest / "SKILL.md").write_text("old", encoding="utf-8")
+def test_copy_all_skills_overwrites_existing(installer_with_skill: Path, bundled_skill: Path, tmp_path: Path):
+    for skill_name in ("context-life-integration", "context-life-governance"):
+        dest = tmp_path / ".gemini" / "skills" / skill_name
+        dest.mkdir(parents=True)
+        (dest / "SKILL.md").write_text("old", encoding="utf-8")
 
-    copy_skill_to_antigravity(tmp_path)
+    copy_all_skills_to_antigravity(tmp_path)
 
-    # Overwrites without error (dirs_exist_ok=True)
-    assert (dest / "SKILL.md").read_text(encoding="utf-8") == "# Skill\nHello world."
+    for skill_name in ("context-life-integration", "context-life-governance"):
+        dest = tmp_path / ".gemini" / "skills" / skill_name
+        # Overwrites without error (dirs_exist_ok=True)
+        assert (dest / "SKILL.md").read_text(encoding="utf-8") == f"# {skill_name}\nHello world."
 
 
 def test_install_skill_for_target_dispatches_opencode(installer_with_skill: Path, bundled_skill: Path, tmp_path: Path):
     install_skill_for_target("opencode", tmp_path)
-    assert (tmp_path / ".config" / "opencode" / "skills" / "context-life-integration").exists()
+    for skill_name in ("context-life-integration", "context-life-governance"):
+        assert (tmp_path / ".config" / "opencode" / "skills" / skill_name).exists()
 
 
 def test_install_skill_for_target_dispatches_antigravity(
     installer_with_skill: Path, bundled_skill: Path, tmp_path: Path
 ):
     install_skill_for_target("antigravity", tmp_path)
-    assert (tmp_path / ".gemini" / "skills" / "context-life-integration").exists()
+    for skill_name in ("context-life-integration", "context-life-governance"):
+        assert (tmp_path / ".gemini" / "skills" / skill_name).exists()
 
 
 def test_install_skill_for_target_vscode_silent_noop(installer_with_skill: Path, bundled_skill: Path, tmp_path: Path):
@@ -149,16 +164,16 @@ def test_install_skill_for_target_unknown_raises(installer_with_skill: Path, bun
 def test_verify_install_returns_true_when_skill_present(
     installer_with_skill: Path, bundled_skill: Path, tmp_path: Path
 ):
-    # OpenCode: MCP config + skill present
+    # OpenCode: MCP config + all skills present
     cfg_path = tmp_path / ".config" / "opencode" / "opencode.json"
     cfg_path.parent.mkdir(parents=True)
     cfg_path.write_text('{"mcp": {"context-life": {}}}', encoding="utf-8")
-    copy_skill_to_opencode(tmp_path)
+    copy_all_skills_to_opencode(tmp_path)
 
     mcp_ok, skill_ok, msg = verify_install("opencode", tmp_path)
     assert mcp_ok is True
     assert skill_ok is True
-    assert "MCP and skill installed" in msg
+    assert "all skills installed" in msg
 
 
 def test_verify_install_returns_false_when_skill_missing(
@@ -171,7 +186,7 @@ def test_verify_install_returns_false_when_skill_missing(
     mcp_ok, skill_ok, msg = verify_install("opencode", tmp_path)
     assert mcp_ok is True
     assert skill_ok is False
-    assert "skill missing" in msg
+    assert "skills missing" in msg
 
 
 def test_verify_install_vscode_no_skill_check(
@@ -305,7 +320,7 @@ def test_install_opencode_also_creates_advisor_prompt(tmp_path: Path):
     assert advisor_prompt.exists()
     content = advisor_prompt.read_text(encoding="utf-8")
     assert "# Context-Life Advisor" in content
-    assert "intercept_user_request" in content
+    assert "autoinvoke_context" in content
 
 
 def test_install_opencode_adds_advisor_agent_entry(tmp_path: Path):
@@ -629,7 +644,7 @@ def test_get_advisor_prompt_content_without_engram(tmp_path: Path):
     content = _get_advisor_prompt_content(stack)
 
     assert "Check Engram" not in content
-    assert "intercept_user_request" in content
+    assert "autoinvoke_context" in content
 
 
 def test_install_context_life_advisor_idempotent(tmp_path: Path):

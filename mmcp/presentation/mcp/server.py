@@ -36,6 +36,10 @@ from mmcp.infrastructure.tokens.token_counter import (
 )
 from mmcp.presentation.app_container import AppContainer
 
+# Auto-invoke and sleep context tools
+from mmcp.presentation.mcp.tools.auto_invoke import autoinvoke_context  # noqa: F401
+from mmcp.presentation.mcp.tools.sleep_context import sleep_context  # noqa: F401
+
 # --- OptimizationStatus helper ---
 _MAX_RESULTING_PROMPT_LENGTH = 2048
 
@@ -80,6 +84,10 @@ mcp = FastMCP(
         "and optimize context caching."
     ),
 )
+
+# Register auto-invoke tools with the MCP server
+mcp.add_tool(autoinvoke_context, name="autoinvoke_context")
+mcp.add_tool(sleep_context, name="sleep_context")
 
 # --- Shared State (per-session singletons) ---
 _token_budget: Optional[TokenBudget] = None

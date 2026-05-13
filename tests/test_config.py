@@ -10,6 +10,132 @@ from mmcp.infrastructure.environment.config import (
 )
 
 
+class TestAutoInvokeCacheConfig:
+    """Test auto_invoke_cache feature flag and TTL config loading."""
+
+    def test_load_config_auto_invoke_cache_enabled(self, tmp_path: Path):
+        """Config should read auto_invoke_cache.enabled flag."""
+        config_path = tmp_path / "config.toml"
+        config_path.write_text(
+            "[auto_invoke_cache]\nenabled = true\n",
+            encoding="utf-8",
+        )
+
+        cfg = load_config(str(config_path))
+
+        assert cfg.auto_invoke_cache_enabled is True
+
+    def test_load_config_auto_invoke_cache_disabled(self, tmp_path: Path):
+        """Config should default to disabled when absent."""
+        config_path = tmp_path / "config.toml"
+        config_path.write_text("", encoding="utf-8")
+
+        cfg = load_config(str(config_path))
+
+        assert cfg.auto_invoke_cache_enabled is False
+
+    def test_load_config_auto_invoke_cache_ttl_seconds(self, tmp_path: Path):
+        """Config should read auto_invoke_cache.ttl_seconds."""
+        config_path = tmp_path / "config.toml"
+        config_path.write_text(
+            "[auto_invoke_cache]\nenabled = true\nttl_seconds = 300\n",
+            encoding="utf-8",
+        )
+
+        cfg = load_config(str(config_path))
+
+        assert cfg.auto_invoke_cache_ttl_seconds == 300
+
+    def test_load_config_auto_invoke_cache_max_entry_size_bytes(self, tmp_path: Path):
+        """Config should read auto_invoke_cache.max_entry_size_bytes."""
+        config_path = tmp_path / "config.toml"
+        config_path.write_text(
+            "[auto_invoke_cache]\nenabled = true\nmax_entry_size_bytes = 2097152\n",
+            encoding="utf-8",
+        )
+
+        cfg = load_config(str(config_path))
+
+        assert cfg.auto_invoke_cache_max_entry_size_bytes == 2097152
+
+
+class TestFeatureFlagsConfig:
+    """Test governance and telemetry feature flags."""
+
+    def test_load_config_multi_stack_detection_enabled(self, tmp_path: Path):
+        """Config should read multi_stack_detection.enabled."""
+        config_path = tmp_path / "config.toml"
+        config_path.write_text(
+            "[multi_stack_detection]\nenabled = true\n",
+            encoding="utf-8",
+        )
+
+        cfg = load_config(str(config_path))
+
+        assert cfg.multi_stack_detection_enabled is True
+
+    def test_load_config_cross_session_state_enabled(self, tmp_path: Path):
+        """Config should read cross_session_state.enabled."""
+        config_path = tmp_path / "config.toml"
+        config_path.write_text(
+            "[cross_session_state]\nenabled = true\nmax_state_size_bytes = 1048576\n",
+            encoding="utf-8",
+        )
+
+        cfg = load_config(str(config_path))
+
+        assert cfg.cross_session_state_enabled is True
+        assert cfg.cross_session_state_max_state_size_bytes == 1048576
+
+    def test_load_config_governance_dashboard_enabled(self, tmp_path: Path):
+        """Config should read governance_dashboard.enabled."""
+        config_path = tmp_path / "config.toml"
+        config_path.write_text(
+            "[governance_dashboard]\nenabled = true\n",
+            encoding="utf-8",
+        )
+
+        cfg = load_config(str(config_path))
+
+        assert cfg.governance_dashboard_enabled is True
+
+    def test_load_config_telemetry_integration_auto_invoke(self, tmp_path: Path):
+        """Config should read telemetry.integration.auto_invoke."""
+        config_path = tmp_path / "config.toml"
+        config_path.write_text(
+            "[telemetry]\nintegration_auto_invoke = true\n",
+            encoding="utf-8",
+        )
+
+        cfg = load_config(str(config_path))
+
+        assert cfg.telemetry_integration_auto_invoke is True
+
+    def test_load_config_governance_triggers_enabled(self, tmp_path: Path):
+        """Config should read governance.triggers.enabled."""
+        config_path = tmp_path / "config.toml"
+        config_path.write_text(
+            "[governance]\ntriggers_enabled = true\n",
+            encoding="utf-8",
+        )
+
+        cfg = load_config(str(config_path))
+
+        assert cfg.governance_triggers_enabled is True
+
+    def test_load_config_usage_tracking_enabled(self, tmp_path: Path):
+        """Config should read usage_tracking.enabled."""
+        config_path = tmp_path / "config.toml"
+        config_path.write_text(
+            "[usage_tracking]\nenabled = true\n",
+            encoding="utf-8",
+        )
+
+        cfg = load_config(str(config_path))
+
+        assert cfg.usage_tracking_enabled is True
+
+
 class TestOrchestratorFeaturesConfig:
     """Test OrchestratorFeaturesConfig dataclass."""
 

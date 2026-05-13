@@ -306,58 +306,83 @@ def get_target(key: str) -> InstallTarget:
     raise KeyError(f"Unknown installation target: {key}")
 
 
-def get_skill_source_dir() -> Path:
-    """Return path to the bundled context-life-integration skill directory.
+def get_all_skill_source_dirs() -> list[Path]:
+    """Return paths to all bundled skill directories in installation/skills/.
 
-    Uses importlib.resources to locate the skill bundled in the package.
-    Returns a Path object that can be used with shutil.copytree.
-    Raises FileNotFoundError if the bundled skill is missing.
+    Dynamically scans the installation/skills/ directory for subdirectories
+    containing SKILL.md. This replaces the hardcoded skill name list.
+
+    Each subdirectory of installation/skills/ that contains a SKILL.md is
+    considered a skill and will be installed to the target platform.
+
+    Returns a list of Path objects.
+    Raises FileNotFoundError if no skills are found.
     """
     try:
-        from importlib.resources import files
+        from importlib.resources import files, as_file
 
-        pkg_path = files("mmcp.infrastructure.installation.context-life-integration")
-        skill_file = pkg_path.joinpath("SKILL.md").resolve()
+        skills: list[Path] = []
 
-        if not skill_file.exists():
-            raise FileNotFoundError(f"Bundled skill 'context-life-integration' is missing SKILL.md at {skill_file}")
+        # Dynamically find all skill directories under installation/skills/
+        installation_pkg = "mmcp.infrastructure.installation.skills"
 
-        return skill_file.parent
+        # Dynamically scan for any skill directories containing SKILL.md
+        try:
+            base_path = files(installation_pkg)
+            for child in base_path.iterdir():
+                if child.is_dir():
+                    skill_file = child / "SKILL.md"
+                    if skill_file.exists():
+                        skills.append(skill_file.parent.resolve())
+        except Exception:
+            pass
+
+        if not skills:
+            raise FileNotFoundError(
+                "No bundled skills found in package.\n"
+                "Ensure [tool.setuptools.package-data] includes the skill directories.\n"
+                "Skills should be placed in mmcp/infrastructure/installation/<skill-name>/SKILL.md"
+            )
+        return skills
     except FileNotFoundError:
         raise
     except Exception as exc:
         raise FileNotFoundError(
-            f"Bundled skill 'context-life-integration' not found in package.\n"
+            f"Bundled skills not found in package.\n"
             f"Error: {exc}\n\n"
             "This may indicate the package was not built correctly.\n"
             "Ensure [tool.setuptools.package-data] includes the skill directory."
         )
 
 
-def copy_skill_to_opencode(home: Path) -> None:
-    """Copy context-life-integration skill to OpenCode skills directory."""
-    source = get_skill_source_dir()
-    dest = home / ".config" / "opencode" / "skills" / "context-life-integration"
-    dest.parent.mkdir(parents=True, exist_ok=True)
-    if dest.exists():
-        logger.info("OpenCode skill already present at %s — overwriting.", dest)
-    shutil.copytree(source, dest, dirs_exist_ok=True)
+def copy_all_skills_to_opencode(home: Path) -> None:
+    """Copy all bundled skills to OpenCode skills directory."""
+    for source in get_all_skill_source_dirs():
+        skill_name = source.name
+        dest = home / ".config" / "opencode" / "skills" / skill_name
+        dest.parent.mkdir(parents=True, exist_ok=True)
+        if dest.exists():
+            logger.info("OpenCode skill already present at %s — overwriting.", dest)
+        shutil.copytree(source, dest, dirs_exist_ok=True)
 
 
-def copy_skill_to_antigravity(home: Path) -> None:
-    """Copy context-life-integration skill to Antigravity skills directory."""
-    source = get_skill_source_dir()
-    dest = home / ".gemini" / "skills" / "context-life-integration"
-    dest.parent.mkdir(parents=True, exist_ok=True)
-    shutil.copytree(source, dest, dirs_exist_ok=True)
+def copy_all_skills_to_antigravity(home: Path) -> None:
+    """Copy all bundled skills to Antigravity skills directory."""
+    for source in get_all_skill_source_dirs():
+        skill_name = source.name
+        dest = home / ".gemini" / "skills" / skill_name
+        dest.parent.mkdir(parents=True, exist_ok=True)
+        if dest.exists():
+            logger.info("Antigravity skill already present at %s — overwriting.", dest)
+        shutil.copytree(source, dest, dirs_exist_ok=True)
 
 
 def install_skill_for_target(target_key: str, home_dir: Path) -> None:
     """Dispatch skill copy to the correct platform handler."""
     if target_key == "opencode":
-        copy_skill_to_opencode(home_dir)
+        copy_all_skills_to_opencode(home_dir)
     elif target_key == "antigravity":
-        copy_skill_to_antigravity(home_dir)
+        copy_all_skills_to_antigravity(home_dir)
     elif target_key == "vscode":
         pass
     else:
@@ -373,18 +398,23 @@ def verify_install(target_key: str, home_dir: Path) -> tuple[bool, bool, str]:
     if target_key == "vscode":
         return (mcp_ok, True, "VS Code MCP configured (no skill system).")
 
-    skill_dest = None
+    skill_base = None
     if target_key == "opencode":
-        skill_dest = home_dir / ".config" / "opencode" / "skills" / "context-life-integration"
+        skill_base = home_dir / ".config" / "opencode" / "skills"
     elif target_key == "antigravity":
-        skill_dest = home_dir / ".gemini" / "skills" / "context-life-integration"
+        skill_base = home_dir / ".gemini" / "skills"
 
-    skill_ok = skill_dest is not None and skill_dest.exists()
+    all_skills = get_all_skill_source_dirs()
+    skill_names = [s.name for s in all_skills]
+    skill_ok = all_skills and skill_base and all(
+        (skill_base / name).exists() for name in skill_names
+    )
 
     if mcp_ok and skill_ok:
-        return (True, True, f"{target.label}: MCP and skill installed.")
+        return (True, True, f"{target.label}: MCP and all skills installed.")
     elif mcp_ok and not skill_ok:
-        return (True, False, f"{target.label}: MCP OK, skill missing.")
+        missing = [n for n in skill_names if not (skill_base / n).exists()]
+        return (True, False, f"{target.label}: MCP OK, skills missing: {missing}")
     else:
         return (False, False, f"{target.label}: MCP config missing.")
 
@@ -417,38 +447,38 @@ context before the orchestrator begins working on a task.
 ## Workflow
 
 1. Receive a raw user request from the orchestrator
+2. Call `autoinvoke_context(stack_type="orchestrator")` using the MCP tool
 """
 
     if stack.has_engram:
-        base += """2. Check Engram for conflicting past decisions:
+        base += """3. Check Engram for conflicting past decisions:
    - Call: engram/mem_search with query about past decisions related to the request
-   - If contradiction found → elevate to CRITICAL immediately (skip step 3)
-3. If no contradiction, run D4 classification
+   - If contradiction found → elevate to CRITICAL immediately (skip step 4)
+4. If no contradiction, parse the autoinvoke response
 
 """
     else:
-        base += """2. Run D4 classification by calling intercept_user_request
+        base += """3. Parse the autoinvoke_context response — extract the context pack:
+   - `status`: awakened | delegated
+   - `active_session_id`: session ID for awareness
+   - `level`: REQUIRED | LIGHT | CRITICAL
+   - `recommendations`: what to do next
+   - `session_state`: current state
 
 """
 
-    base += """3. Call `intercept_user_request` via bash:
-   ```
-   python -m mmcp intercept_user_request "YOUR_RAW_REQUEST_HERE"
-   ```
-4. Parse the JSON response — extract the `d4` object (ContextPack):
-   - `d4.state`: LIGHT | REQUIRED | CRITICAL
-   - `d4.confidence`: float
-   - `d4.project_context`: {stack, architecture, testing, package_manager}
-   - `d4.files`: {explicit: [], inferred: []}
-   - `d4.constraints`: list
-   - `d4.missing_context`: list
-   - `d4.next_action`: string
-   - `d4.halt`: object with conflict details if CRITICAL
-
-5. Based on `d4.state`, determine context budget:
+    base += """4. Based on `level`, determine context budget:
    - LIGHT = small budget (min tokens to validate paths)
    - REQUIRED = medium (search for missing pieces)
    - CRITICAL = tiny (halt only, no code generation)
+
+5. Return a Markdown report to the orchestrator:
+
+## Context Analysis
+
+**State**: [level from autoinvoke response]
+**Session ID**: [active_session_id]
+**Recommendations**: [recommendations from response]
 
 """
 
@@ -461,54 +491,21 @@ If Engram check found a contradiction, format CRITICAL output with:
 
 """
 
-    base += """## Output Format
-
-Return a Markdown report to the orchestrator:
-
-## Context Analysis
-
-**State**: [d4.state]
-**Confidence**: [d4.confidence]
-**Goal**: [extracted from request]
-
-### Project Context
-- Stack: [d4.project_context.stack]
-- Architecture: [d4.project_context.architecture]
-- Testing: [d4.project_context.testing]
-- Package Manager: [d4.project_context.package_manager]
-
-### Files
-- Explicit: [d4.files.explicit]
-- Inferred: [d4.files.inferred]
-
-### Constraints
-[d4.constraints]
-
-### Missing Context
-[d4.missing_context]
-
-### Next Action
-[d4.next_action]
-
-## If CRITICAL (HALT)
+    base += """## If CRITICAL (HALT)
 
 """
 
     if stack.has_gentle_ai and stack.has_engram:
         base += """⚠️ **HALT REQUIRED** — Conflict with past decisions or detected contradiction
-- **Risk**: [d4.halt.risk]
-- **Detected Goal**: [d4.halt.detected_goal]
-- **Conflict**: [d4.halt.conflict]
-- **Required Decision**: [d4.halt.required_decision]
+- **Session ID**: [active_session_id]
+- **Required Decision**: Show the halt details to user and wait for response
 - **Strict TDD Question**: ¿Deseas actualizar la suite de tests de integración para este cambio mayor?
 
 """
     else:
         base += """⚠️ **HALT REQUIRED**
-- **Risk**: [d4.halt.risk]
-- **Detected Goal**: [d4.halt.detected_goal]
-- **Conflict**: [d4.halt.conflict]
-- **Required Decision**: [d4.halt.required_decision]
+- **Session ID**: [active_session_id]
+- **Required Decision**: Show the halt details to user and wait for response
 
 """
 
@@ -516,6 +513,7 @@ Return a Markdown report to the orchestrator:
 
 - Do NOT write code — only analyze and report
 - Do NOT delegate to other agents
+- Use `autoinvoke_context` MCP tool (not bash/python calls)
 - Return the Markdown report to the orchestrator
 """
 

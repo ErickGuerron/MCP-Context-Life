@@ -172,6 +172,47 @@ def save_config(
         ),
         ("paths", {"data_dir": data_dir}),
         ("upgrade", {"github_repo": config.github_repo}),
+        (
+            "auto_invoke_cache",
+            {
+                "enabled": config.auto_invoke_cache_enabled,
+                "ttl_seconds": config.auto_invoke_cache_ttl_seconds,
+                "max_entry_size_bytes": config.auto_invoke_cache_max_entry_size_bytes,
+            },
+        ),
+        (
+            "multi_stack_detection",
+            {"enabled": config.multi_stack_detection_enabled},
+        ),
+        (
+            "cross_session_state",
+            {
+                "enabled": config.cross_session_state_enabled,
+                "max_state_size_bytes": config.cross_session_state_max_state_size_bytes,
+            },
+        ),
+        (
+            "governance_dashboard",
+            {"enabled": config.governance_dashboard_enabled},
+        ),
+        (
+            "telemetry",
+            {"integration_auto_invoke": config.telemetry_integration_auto_invoke},
+        ),
+        (
+            "governance",
+            {
+                "triggers_enabled": config.governance_triggers_enabled,
+                "triggers": {
+                    "long_message_threshold": config.governance_triggers_long_message_threshold,
+                    "repeated_tool_threshold": config.governance_triggers_repeated_tool_threshold,
+                },
+            },
+        ),
+        (
+            "usage_tracking",
+            {"enabled": config.usage_tracking_enabled},
+        ),
     ]
 
     lines: list[str] = []
@@ -235,6 +276,22 @@ class CLConfig:
     orchestrator_mode: str = "auto"
     orchestrator_features: OrchestratorFeaturesConfig = field(default_factory=OrchestratorFeaturesConfig)
 
+    # --- Auto Invoke Cache ---
+    auto_invoke_cache_enabled: bool = False
+    auto_invoke_cache_ttl_seconds: int = 60
+    auto_invoke_cache_max_entry_size_bytes: int = 1048576
+
+    # --- Feature Flags ---
+    multi_stack_detection_enabled: bool = False
+    cross_session_state_enabled: bool = False
+    cross_session_state_max_state_size_bytes: int = 1048576
+    governance_dashboard_enabled: bool = False
+    telemetry_integration_auto_invoke: bool = False
+    governance_triggers_enabled: bool = False
+    governance_triggers_long_message_threshold: int = 15
+    governance_triggers_repeated_tool_threshold: int = 3
+    usage_tracking_enabled: bool = False
+
     def resolve_data_dir(self) -> Path:
         """Resolve the data directory, creating it if needed."""
         if self.data_dir:
@@ -277,6 +334,18 @@ def _env_override(config: CLConfig) -> None:
         "CL_CACHE_RAG_BYPASS_COOLDOWN": ("cache_rag_bypass_cooldown", int),
         "CL_DATA_DIR": ("data_dir", str),
         "CL_GITHUB_REPO": ("github_repo", str),
+        "CL_AUTO_INVOKE_CACHE_ENABLED": ("auto_invoke_cache_enabled", bool),
+        "CL_AUTO_INVOKE_CACHE_TTL_SECONDS": ("auto_invoke_cache_ttl_seconds", int),
+        "CL_AUTO_INVOKE_CACHE_MAX_ENTRY_SIZE_BYTES": ("auto_invoke_cache_max_entry_size_bytes", int),
+        "CL_MULTI_STACK_DETECTION_ENABLED": ("multi_stack_detection_enabled", bool),
+        "CL_CROSS_SESSION_STATE_ENABLED": ("cross_session_state_enabled", bool),
+        "CL_CROSS_SESSION_STATE_MAX_STATE_SIZE_BYTES": ("cross_session_state_max_state_size_bytes", int),
+        "CL_GOVERNANCE_DASHBOARD_ENABLED": ("governance_dashboard_enabled", bool),
+        "CL_TELEMETRY_INTEGRATION_AUTO_INVOKE": ("telemetry_integration_auto_invoke", bool),
+        "CL_GOVERNANCE_TRIGGERS_ENABLED": ("governance_triggers_enabled", bool),
+        "CL_GOVERNANCE_TRIGGERS_LONG_MESSAGE_THRESHOLD": ("governance_triggers_long_message_threshold", int),
+        "CL_GOVERNANCE_TRIGGERS_REPEATED_TOOL_THRESHOLD": ("governance_triggers_repeated_tool_threshold", int),
+        "CL_USAGE_TRACKING_ENABLED": ("usage_tracking_enabled", bool),
     }
 
     for env_key, (attr, cast) in env_map.items():
@@ -357,6 +426,47 @@ def load_config(config_path: Optional[str] = None) -> CLConfig:
         upgrade = data.get("upgrade", {})
         if "github_repo" in upgrade:
             config.github_repo = upgrade["github_repo"]
+
+        auto_invoke_cache = data.get("auto_invoke_cache", {})
+        if "enabled" in auto_invoke_cache:
+            config.auto_invoke_cache_enabled = bool(auto_invoke_cache["enabled"])
+        if "ttl_seconds" in auto_invoke_cache:
+            config.auto_invoke_cache_ttl_seconds = int(auto_invoke_cache["ttl_seconds"])
+        if "max_entry_size_bytes" in auto_invoke_cache:
+            config.auto_invoke_cache_max_entry_size_bytes = int(auto_invoke_cache["max_entry_size_bytes"])
+
+        multi_stack_detection = data.get("multi_stack_detection", {})
+        if "enabled" in multi_stack_detection:
+            config.multi_stack_detection_enabled = bool(multi_stack_detection["enabled"])
+
+        cross_session_state = data.get("cross_session_state", {})
+        if "enabled" in cross_session_state:
+            config.cross_session_state_enabled = bool(cross_session_state["enabled"])
+        if "max_state_size_bytes" in cross_session_state:
+            config.cross_session_state_max_state_size_bytes = int(cross_session_state["max_state_size_bytes"])
+
+        governance_dashboard = data.get("governance_dashboard", {})
+        if "enabled" in governance_dashboard:
+            config.governance_dashboard_enabled = bool(governance_dashboard["enabled"])
+
+        telemetry = data.get("telemetry", {})
+        if "integration_auto_invoke" in telemetry:
+            config.telemetry_integration_auto_invoke = bool(telemetry["integration_auto_invoke"])
+
+        governance = data.get("governance", {})
+        if isinstance(governance, dict):
+            if "triggers_enabled" in governance:
+                config.governance_triggers_enabled = bool(governance["triggers_enabled"])
+            triggers = governance.get("triggers", {})
+            if isinstance(triggers, dict):
+                if "long_message_threshold" in triggers:
+                    config.governance_triggers_long_message_threshold = int(triggers["long_message_threshold"])
+                if "repeated_tool_threshold" in triggers:
+                    config.governance_triggers_repeated_tool_threshold = int(triggers["repeated_tool_threshold"])
+
+        usage_tracking = data.get("usage_tracking", {})
+        if "enabled" in usage_tracking:
+            config.usage_tracking_enabled = bool(usage_tracking["enabled"])
 
         orchestrator = data.get("orchestrator", {})
         if orchestrator:

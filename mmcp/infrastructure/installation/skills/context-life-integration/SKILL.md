@@ -3,7 +3,7 @@ name: context-life-integration
 description: "Trigger: context-life no se invoca solo, subagentes no usan el MCP, integrar con gentle-ai, cómo uso context-life con engram. Decision-driven context prioritization and visible MCP tool invocation for multi-agent pipelines."
 license: Apache-2.0
 metadata:
-  author: gentleman-programming
+  author: erickguerron
   version: "1.0"
 ---
 
@@ -22,12 +22,12 @@ Use this skill when user wants context-life MCP invoked automatically, needs to 
 
 ## Decision Table
 
-| `orchestrator_name` from MCP | Action |
-|-------------------------------|--------|
-| `gentle-ai` | Use engram as primary memory, context-life as optimization layer. Give user gentle-ai config instructions (don't modify their prompt). |
-| `engram` (no gentle-ai) | Engram primary → context-life secondary → project files |
-| `opencode` | context-life direct with advisor_mode=true. Show visible tool calls. |
-| `none` | context-life direct → project files |
+| `orchestrator_name` from MCP | Action                                                                                                                                 |
+| ---------------------------- | -------------------------------------------------------------------------------------------------------------------------------------- |
+| `gentle-ai`                  | Use engram as primary memory, context-life as optimization layer. Give user gentle-ai config instructions (don't modify their prompt). |
+| `engram` (no gentle-ai)      | Engram primary → context-life secondary → project files                                                                                |
+| `opencode`                   | context-life direct with advisor_mode=true. Show visible tool calls.                                                                   |
+| `none`                       | context-life direct → project files                                                                                                    |
 
 ## Execution Steps
 
@@ -75,6 +75,7 @@ Use this skill when user wants context-life MCP invoked automatically, needs to 
 
 ```markdown
 ## MCP context-life
+
 - Invoke `context-life/intercept_user_request` at start of each task
 - Monitor tokens — if > 80%, invoke `context-life/analyze_context_health_tool`
 - Show ⚙ context-life/[tool] in each invocation
@@ -109,12 +110,12 @@ Show: ⚙ context-life/[tool_name] for every invocation
 
 ## Env Vars for context-life
 
-| Variable | Value | Effect |
-|----------|-------|--------|
-| `MCP_ORCHESTRATOR` | `opencode`, `claude_code`, etc. | Activates detection in orchestrator_detector.py |
-| `CONTEXT_LIFE_ADVISOR_MODE` | `true` | Forces advisor_mode in subagents |
-| `CONTEXT_LIFE_VISIBILITY` | `true` | Enables ⚙ output |
-| `CONTEXT_LIFE_TOKEN_THRESHOLD` | `0.8` | Threshold for analyze_context_health_tool |
+| Variable                       | Value                           | Effect                                          |
+| ------------------------------ | ------------------------------- | ----------------------------------------------- |
+| `MCP_ORCHESTRATOR`             | `opencode`, `claude_code`, etc. | Activates detection in orchestrator_detector.py |
+| `CONTEXT_LIFE_ADVISOR_MODE`    | `true`                          | Forces advisor_mode in subagents                |
+| `CONTEXT_LIFE_VISIBILITY`      | `true`                          | Enables ⚙ output                                |
+| `CONTEXT_LIFE_TOKEN_THRESHOLD` | `0.8`                           | Threshold for analyze_context_health_tool       |
 
 ## References
 
