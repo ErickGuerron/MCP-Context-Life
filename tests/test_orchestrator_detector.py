@@ -560,13 +560,16 @@ class TestMultiStackDetection:
                 from unittest.mock import MagicMock
 
                 from mmcp.infrastructure.environment import config as config_module
-                from mmcp.infrastructure.environment.orchestrator_detector import _check_multi_stack
+                from mmcp.infrastructure.environment.orchestrator_detector import (
+                    _check_multi_stack,
+                )
 
                 mock_config = config_module.CLConfig()
                 mock_config.multi_stack_detection_enabled = True
                 mock_process = MagicMock()
                 mock_process.pid = 1234
-                mock_process.info = {"name": "codex-cli.exe"}
+                # Use cross-platform name (test runs on Linux, codex-cli without .exe)
+                mock_process.info = {"name": "codex-cli"}
                 with patch.object(config_module, "get_config", return_value=mock_config):
                     with patch(
                         "mmcp.infrastructure.environment.orchestrator_detector.psutil.process_iter"
