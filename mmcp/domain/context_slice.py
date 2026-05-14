@@ -14,7 +14,7 @@ This enables sub-agents to make informed decisions based on cache state.
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from typing import Any, Callable, List, Optional
+from typing import Callable, List, Optional
 
 
 @dataclass

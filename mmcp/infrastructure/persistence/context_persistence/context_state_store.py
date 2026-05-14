@@ -11,8 +11,6 @@ import json
 from pathlib import Path
 from typing import Optional, Protocol
 
-from mmcp.domain.session_state import SessionState
-
 
 class ContextStateStore(Protocol):
     """Protocol for context state persistence."""

@@ -346,7 +346,7 @@ def get_all_skill_source_dirs() -> list[Path]:
     Raises FileNotFoundError if no skills are found.
     """
     try:
-        from importlib.resources import files, as_file
+        from importlib.resources import files
 
         skills: list[Path] = []
 

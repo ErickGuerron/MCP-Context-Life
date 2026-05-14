@@ -15,14 +15,10 @@ Provides cross-session state persistence using SQLite with:
 from __future__ import annotations
 
 import json
-import os
-import shutil
 import sqlite3
 import time
 from pathlib import Path
 from typing import Any, Optional
-
-from mmcp.infrastructure.environment.config import get_config
 
 
 class SessionPersistence:

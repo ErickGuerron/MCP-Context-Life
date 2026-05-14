@@ -13,8 +13,6 @@ import tempfile
 from pathlib import Path
 from unittest.mock import patch
 
-import pytest
-
 from mmcp.orchestration.stack_detector import StackType, detect
 
 

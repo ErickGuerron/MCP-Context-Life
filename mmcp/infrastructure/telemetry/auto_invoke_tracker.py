@@ -17,7 +17,6 @@ from typing import Callable, Optional
 from mmcp.domain.models import UsageEvent
 from mmcp.infrastructure.environment.config import get_config
 
-
 _logger = logging.getLogger(__name__)
 
 

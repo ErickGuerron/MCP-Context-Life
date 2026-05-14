@@ -1557,15 +1557,12 @@ def _build_advisor_model_menu(
 ) -> MenuScreen:
     """Build provider/model selection screens backed by the OpenCode cache."""
     from mmcp.infrastructure.installation.context_life_installer import (
-        ConnectedProvider,
-        LocalModel,
-        ZenModel,
         ZEN_MODELS,
-        get_context_life_advisor_model,
         _get_auth_providers,
         _get_local_models,
         _get_provider_models,
         _is_zen_connected,
+        get_context_life_advisor_model,
     )
 
     home = Path.home()
@@ -2140,7 +2137,7 @@ def _build_telemetry_content():
     """Build the compact telemetry dashboard renderables (does NOT print)."""
     from mmcp.infrastructure.environment.config import get_config
     from mmcp.infrastructure.persistence.session_store import SessionStore
-    from mmcp.presentation.cli.dashboard import get_governance_info, format_governance_rows
+    from mmcp.presentation.cli.dashboard import format_governance_rows, get_governance_info
 
     cfg = get_config()
     store = SessionStore(cfg.resolve_cache_db_path())
@@ -2213,7 +2210,7 @@ def _build_telemetry_pages() -> list[DetailPage]:
     """Split telemetry into overview and per-model usage pages."""
     from mmcp.infrastructure.environment.config import get_config
     from mmcp.infrastructure.persistence.session_store import SessionStore
-    from mmcp.presentation.cli.dashboard import get_governance_info, format_governance_rows
+    from mmcp.presentation.cli.dashboard import format_governance_rows, get_governance_info
 
     cfg = get_config()
     store = SessionStore(cfg.resolve_cache_db_path())

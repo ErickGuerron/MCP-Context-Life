@@ -466,7 +466,7 @@ def do_doctor():
 def _build_telemetry_content():
     from mmcp.infrastructure.environment.config import get_config
     from mmcp.infrastructure.persistence.session_store import SessionStore
-    from mmcp.presentation.cli.dashboard import get_governance_info, format_governance_rows
+    from mmcp.presentation.cli.dashboard import format_governance_rows, get_governance_info
 
     cfg = get_config()
     store = SessionStore(cfg.resolve_cache_db_path())
@@ -539,7 +539,7 @@ def _build_telemetry_content():
 def _build_telemetry_pages() -> list[DetailPage]:
     from mmcp.infrastructure.environment.config import get_config
     from mmcp.infrastructure.persistence.session_store import SessionStore
-    from mmcp.presentation.cli.dashboard import get_governance_info, format_governance_rows
+    from mmcp.presentation.cli.dashboard import format_governance_rows, get_governance_info
 
     cfg = get_config()
     store = SessionStore(cfg.resolve_cache_db_path())

@@ -2,13 +2,8 @@
 Tests for AutoInvokeCache: TTL cache with SHA-256 key derivation.
 """
 
-import json
-import time
-import hashlib
 import threading
-from pathlib import Path
-
-import pytest
+import time
 
 from mmcp.orchestration.auto_invoke_cache import AutoInvokeCache
 

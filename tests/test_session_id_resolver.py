@@ -10,14 +10,11 @@ TTL is 12 hours (43200 seconds).
 DISABLE_AUTOINVOKE=1 → returns None (no-op).
 """
 
-import hashlib
 import os
 import tempfile
 import time
 from pathlib import Path
 from unittest.mock import patch
-
-import pytest
 
 from mmcp.infrastructure.session_id_resolver import resolve
 

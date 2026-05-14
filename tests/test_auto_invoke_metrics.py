@@ -3,16 +3,14 @@ Tests for AutoInvokeMetrics: async Counter, Histogram, Gauge with Queue emission
 """
 
 import queue
-import time
-import threading
 
 import pytest
 
 from mmcp.domain.auto_invoke_metrics import (
     AutoInvokeMetrics,
     Counter,
-    Histogram,
     Gauge,
+    Histogram,
 )
 
 
@@ -212,8 +210,8 @@ class TestAutoInvokeMetricsBypass:
 
     def test_bypass_when_disabled(self):
         """When usage_tracking.enabled is False, metrics recording is skipped."""
-        from mmcp.infrastructure.environment.config import reset_config
         from mmcp.domain.auto_invoke_metrics import AutoInvokeMetrics
+        from mmcp.infrastructure.environment.config import reset_config
 
         reset_config()
 

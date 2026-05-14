@@ -13,13 +13,7 @@ These tests should FAIL initially (RED phase) since session_persistence.py
 doesn't exist yet.
 """
 
-import pytest
-import tempfile
-from pathlib import Path
-from unittest.mock import patch, MagicMock
-import time
-import json
-import sqlite3
+from unittest.mock import patch
 
 
 def _make_enabled_config(mock_config):

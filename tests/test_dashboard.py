@@ -1,7 +1,6 @@
 """Tests for Phase 7 — Governance helpers integrated into existing telemetry view."""
-import pytest
 import time
-from unittest.mock import patch, MagicMock
+from unittest.mock import MagicMock, patch
 
 
 class TestGovernanceHelpers:
@@ -10,7 +9,6 @@ class TestGovernanceHelpers:
     def test_get_governance_info_returns_dict_when_tracking_enabled(self):
         """get_governance_info() returns a dict with governance metrics when tracking is on."""
         import sys
-        from unittest.mock import MagicMock
 
         # Block SessionStore at module level BEFORE importing anything
         with patch.dict(sys.modules, {"mmcp.infrastructure.persistence.session_store": MagicMock()}):
@@ -66,7 +64,6 @@ class TestGovernanceHelpers:
     def test_cache_cold_when_no_invokes(self):
         """Cache status is 'cold' when total_invokes == 0."""
         import sys
-        from unittest.mock import MagicMock
 
         with patch.dict(sys.modules, {"mmcp.infrastructure.persistence.session_store": MagicMock()}):
             from mmcp.presentation.cli.dashboard import get_governance_info
@@ -96,7 +93,6 @@ class TestGovernanceHelpers:
     def test_priority_high_when_many_invokes(self):
         """Priority is 'high' when invocations > 100."""
         import sys
-        from unittest.mock import MagicMock
 
         with patch.dict(sys.modules, {"mmcp.infrastructure.persistence.session_store": MagicMock()}):
             from mmcp.presentation.cli.dashboard import get_governance_info

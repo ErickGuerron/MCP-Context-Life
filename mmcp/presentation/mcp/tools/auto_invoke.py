@@ -17,7 +17,8 @@ from typing import Optional
 
 from mmcp.domain.session_state import PhaseGuardError, SessionState, SessionStateMachine
 from mmcp.infrastructure.session_id_resolver import resolve as resolve_session_id
-from mmcp.orchestration.stack_detector import StackType, detect as detect_stack
+from mmcp.orchestration.stack_detector import StackType
+from mmcp.orchestration.stack_detector import detect as detect_stack
 
 # Module-level state machine for session tracking
 _state_machine: Optional[SessionStateMachine] = None

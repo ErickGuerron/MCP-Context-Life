@@ -10,19 +10,21 @@ from __future__ import annotations
 import json
 import os
 from pathlib import Path
-from unittest.mock import patch, MagicMock
+from unittest.mock import patch
 
-import pytest
-
+from mmcp.orchestration.stack_detector import StackType
 from mmcp.presentation.mcp.tools.auto_invoke import (
     _reset_state_machine as reset_autoinvoke_state,
+)
+from mmcp.presentation.mcp.tools.auto_invoke import (
     autoinvoke_context,
 )
 from mmcp.presentation.mcp.tools.sleep_context import (
     _reset_state_machine as reset_sleep_state,
+)
+from mmcp.presentation.mcp.tools.sleep_context import (
     sleep_context,
 )
-from mmcp.orchestration.stack_detector import StackType
 
 
 class TestSoloAgentFullCycle:

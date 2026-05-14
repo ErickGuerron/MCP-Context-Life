@@ -9,15 +9,14 @@ import os
 from pathlib import Path
 from unittest.mock import patch
 
-import pytest
-
-from mmcp.domain.session_state import SessionState
 from mmcp.presentation.mcp.tools.auto_invoke import (
     _reset_state_machine,
     autoinvoke_context,
 )
 from mmcp.presentation.mcp.tools.sleep_context import (
     _reset_state_machine as reset_sleep_state_machine,
+)
+from mmcp.presentation.mcp.tools.sleep_context import (
     sleep_context,
 )
 

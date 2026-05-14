@@ -5,11 +5,8 @@ Phase 9: Context Slice Enhancement for auto-invoke optimization.
 """
 
 import time
-from unittest.mock import MagicMock, patch
 
-import pytest
-
-from mmcp.domain.context_slice import ContextSlice, _set_lazy_loader, _clear_lazy_loader
+from mmcp.domain.context_slice import ContextSlice, _clear_lazy_loader, _set_lazy_loader
 from mmcp.orchestration.auto_invoke_cache import AutoInvokeCache
 
 

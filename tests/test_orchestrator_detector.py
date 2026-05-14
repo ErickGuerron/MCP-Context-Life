@@ -557,9 +557,10 @@ class TestMultiStackDetection:
         with tempfile.TemporaryDirectory() as tmp:
             env = {"CURSOR_DIR": tmp, "WINDURF_DATA_DIR": tmp}
             with patch.dict(os.environ, env, clear=False):
+                from unittest.mock import MagicMock
+
                 from mmcp.infrastructure.environment import config as config_module
                 from mmcp.infrastructure.environment.orchestrator_detector import _check_multi_stack
-                from unittest.mock import MagicMock
 
                 mock_config = config_module.CLConfig()
                 mock_config.multi_stack_detection_enabled = True

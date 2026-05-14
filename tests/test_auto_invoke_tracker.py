@@ -1,13 +1,10 @@
 """Tests for auto_invoke_tracker - Phase 8 telemetry integration."""
 
 import queue
-import tempfile
 import threading
 import time
 from threading import Thread
-from unittest.mock import MagicMock, patch
-
-import pytest
+from unittest.mock import MagicMock
 
 from mmcp.domain.models import UsageEvent
 

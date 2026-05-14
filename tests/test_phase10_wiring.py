@@ -11,11 +11,8 @@ Tests that all auto-invoke-improvements components are wired correctly:
 """
 
 import os
-import time
 from pathlib import Path
-from unittest.mock import patch, MagicMock
-
-import pytest
+from unittest.mock import patch
 
 
 class TestAutoInvokeCacheWiring:
@@ -126,7 +123,6 @@ class TestMultiStackDetectionWiring:
         # Set env vars pointing to existing directories
         with patch.dict(os.environ, {"CURSOR_DIR": str(cursor_dir), "WINDURF_DATA_DIR": str(windsurf_dir)}):
             from mmcp.infrastructure.environment.orchestrator_detector import (
-                reset_detection,
                 _check_multi_stack,
             )
 
