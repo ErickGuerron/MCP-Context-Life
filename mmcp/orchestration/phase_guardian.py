@@ -48,8 +48,7 @@ class PhaseGuardian:
 
         if not spec_path.exists():
             raise PhaseGuardianError(
-                phase="spec",
-                reason=f"spec.md not found at {spec_path}. Run 'sdd-spec' before 'sdd-apply'."
+                phase="spec", reason=f"spec.md not found at {spec_path}. Run 'sdd-spec' before 'sdd-apply'."
             )
 
         logger.info("PhaseGuardian: spec verified for change '%s'", change_name)
@@ -68,8 +67,7 @@ class PhaseGuardian:
 
         if not design_path.exists():
             raise PhaseGuardianError(
-                phase="design",
-                reason=f"design.md not found at {design_path}. Run 'sdd-design' before 'sdd-apply'."
+                phase="design", reason=f"design.md not found at {design_path}. Run 'sdd-design' before 'sdd-apply'."
             )
 
         logger.info("PhaseGuardian: design verified for change '%s'", change_name)
@@ -88,8 +86,7 @@ class PhaseGuardian:
 
         if not tasks_path.exists():
             raise PhaseGuardianError(
-                phase="tasks",
-                reason=f"tasks.md not found at {tasks_path}. Run 'sdd-tasks' before 'sdd-apply'."
+                phase="tasks", reason=f"tasks.md not found at {tasks_path}. Run 'sdd-tasks' before 'sdd-apply'."
             )
 
         logger.info("PhaseGuardian: tasks verified for change '%s'", change_name)

@@ -47,6 +47,7 @@ class TestAutoinvokeContext:
         # Mock detection as ORCHESTRATOR
         with patch("mmcp.presentation.mcp.tools.auto_invoke.detect_stack") as mock_detect:
             from mmcp.orchestration.stack_detector import StackType
+
             mock_detect.return_value = StackType.ORCHESTRATOR
 
             result = json.loads(autoinvoke_context("orchestrator"))

@@ -28,9 +28,7 @@ class Counter:
         self._data: dict[tuple[str, str, str, str], int] = {}
         self._lock = threading.Lock()
 
-    def increment(
-        self, host: str, agent: str, provider: str, model: str, *, delta: int = 1
-    ) -> None:
+    def increment(self, host: str, agent: str, provider: str, model: str, *, delta: int = 1) -> None:
         key = (host, agent, provider, model)
         with self._lock:
             self._data[key] = self._data.get(key, 0) + delta
@@ -46,10 +44,7 @@ class Counter:
 
     def breakdown(self) -> dict[str, int]:
         with self._lock:
-            return {
-                f"{h}/{a}/{p}/{m}": v
-                for (h, a, p, m), v in self._data.items()
-            }
+            return {f"{h}/{a}/{p}/{m}": v for (h, a, p, m), v in self._data.items()}
 
 
 class Histogram:
@@ -59,9 +54,7 @@ class Histogram:
         self._data: dict[tuple[str, str, str, str], list[float]] = {}
         self._lock = threading.Lock()
 
-    def record(
-        self, host: str, agent: str, provider: str, model: str, value: float
-    ) -> None:
+    def record(self, host: str, agent: str, provider: str, model: str, value: float) -> None:
         key = (host, agent, provider, model)
         with self._lock:
             if key not in self._data:
@@ -81,9 +74,7 @@ class Gauge:
         self._data: dict[tuple[str, str, str, str], float] = {}
         self._lock = threading.Lock()
 
-    def set(
-        self, host: str, agent: str, provider: str, model: str, value: float
-    ) -> None:
+    def set(self, host: str, agent: str, provider: str, model: str, value: float) -> None:
         key = (host, agent, provider, model)
         with self._lock:
             self._data[key] = value
@@ -137,9 +128,7 @@ class AutoInvokeMetrics:
             except Exception:
                 pass  # Non-critical
 
-    def increment_invokes(
-        self, host: str, agent: str, provider: str, model: str
-    ) -> None:
+    def increment_invokes(self, host: str, agent: str, provider: str, model: str) -> None:
         """Increment the auto-invoke counter."""
         if not self._enabled:
             return

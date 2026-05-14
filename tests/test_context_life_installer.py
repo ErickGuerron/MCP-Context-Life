@@ -41,7 +41,11 @@ def installer_with_skill(tmp_path: Path, monkeypatch: MonkeyPatch, bundled_skill
     """Patch get_all_skill_source_dirs to return our fake bundled skill directories."""
     import mmcp.infrastructure.installation.context_life_installer as installer_module
 
-    monkeypatch.setattr(installer_module, "get_all_skill_source_dirs", lambda: [bundled_skill / "context-life-integration", bundled_skill / "context-life-governance"])
+    monkeypatch.setattr(
+        installer_module,
+        "get_all_skill_source_dirs",
+        lambda: [bundled_skill / "context-life-integration", bundled_skill / "context-life-governance"],
+    )
     return tmp_path
 
 
@@ -108,7 +112,9 @@ def test_copy_all_skills_to_opencode_overwrites_existing(
     assert any("already present" in record.message for record in caplog.records)
 
 
-def test_copy_all_skills_to_antigravity_creates_parent_dirs(installer_with_skill: Path, bundled_skill: Path, tmp_path: Path):
+def test_copy_all_skills_to_antigravity_creates_parent_dirs(
+    installer_with_skill: Path, bundled_skill: Path, tmp_path: Path
+):
     assert not (tmp_path / ".gemini").exists()
     copy_all_skills_to_antigravity(tmp_path)
 
@@ -272,10 +278,7 @@ def test_menu_panel_does_not_overflow_viewport(monkeypatch: MonkeyPatch):
     screen = cli.MenuScreen(
         title="Scroll Test",
         subtitle="Long list should stay inside the panel",
-        items=[
-            cli.MenuItem(label=f"Item {i}", description=f"Description {i}", action=lambda: None)
-            for i in range(20)
-        ],
+        items=[cli.MenuItem(label=f"Item {i}", description=f"Description {i}", action=lambda: None) for i in range(20)],
     )
     renderable = cli._build_menu_panel(screen, "Main › Config", None)
     lines = cli._render_renderable_to_lines(renderable, 100)

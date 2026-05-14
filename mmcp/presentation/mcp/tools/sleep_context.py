@@ -43,20 +43,13 @@ def sleep_context() -> str:
     """
     # Bypass if DISABLE_AUTOINVOKE=1
     if os.environ.get("DISABLE_AUTOINVOKE") == "1":
-        return json.dumps({
-            "status": "bypassed",
-            "reason": "DISABLE_AUTOINVOKE=1",
-            "session_id": None
-        })
+        return json.dumps({"status": "bypassed", "reason": "DISABLE_AUTOINVOKE=1", "session_id": None})
 
     # Derive session ID server-side
     session_id = resolve_session_id()
 
     if session_id is None:
-        return json.dumps({
-            "status": "no_session",
-            "session_id": None
-        })
+        return json.dumps({"status": "no_session", "session_id": None})
 
     # Handle state machine transitions
     sm = _get_state_machine()
@@ -76,17 +69,15 @@ def sleep_context() -> str:
     session_file = config_dir / session_id[:16] / "state.json"  # Use first 16 chars of session_id as folder name
     session_file.parent.mkdir(parents=True, exist_ok=True)
 
-    state_data = {
-        "session_id": session_id,
-        "state": sm.get_current_state().value,
-        "persisted": True
-    }
+    state_data = {"session_id": session_id, "state": sm.get_current_state().value, "persisted": True}
 
     session_file.write_text(json.dumps(state_data, indent=2), encoding="utf-8")
 
-    return json.dumps({
-        "status": "persisted",
-        "session_id": session_id,
-        "state": sm.get_current_state().value,
-        "path": str(session_file)
-    })
+    return json.dumps(
+        {
+            "status": "persisted",
+            "session_id": session_id,
+            "state": sm.get_current_state().value,
+            "path": str(session_file),
+        }
+    )

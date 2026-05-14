@@ -142,7 +142,9 @@ class TestMultiStackDetectionWiring:
         cfg.multi_stack_detection_enabled = False
 
         # Even with env vars set, should return None when disabled
-        with patch.dict(os.environ, {"CURSOR_DIR": str(tmp_path / "Cursor"), "WINDURF_DATA_DIR": str(tmp_path / "Windsurf")}):
+        with patch.dict(
+            os.environ, {"CURSOR_DIR": str(tmp_path / "Cursor"), "WINDURF_DATA_DIR": str(tmp_path / "Windsurf")}
+        ):
             from mmcp.infrastructure.environment.orchestrator_detector import _check_multi_stack
 
             result = _check_multi_stack()

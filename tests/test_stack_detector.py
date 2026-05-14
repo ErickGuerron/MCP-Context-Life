@@ -30,7 +30,11 @@ class TestDetectStackType:
     def test_golden_path_solo_agent(self):
         """No signals → SOLO_AGENT."""
         with tempfile.TemporaryDirectory() as tmp:
-            env_clean = {k: v for k, v in os.environ.items() if k not in ("ENGRAM_ACTIVE", "ENGRAM_SESSION_ID", "GENTLE_AI_ACTIVE", "DISABLE_AUTOINVOKE")}
+            env_clean = {
+                k: v
+                for k, v in os.environ.items()
+                if k not in ("ENGRAM_ACTIVE", "ENGRAM_SESSION_ID", "GENTLE_AI_ACTIVE", "DISABLE_AUTOINVOKE")
+            }
             with patch.dict(os.environ, env_clean, clear=True):
                 result = detect(cwd=tmp)
 
@@ -49,7 +53,11 @@ class TestDetectStackType:
     def test_engram_active_signal(self):
         """ENGRAM_ACTIVE=1 → ORCHESTRATOR."""
         with tempfile.TemporaryDirectory() as tmp:
-            env_clean = {k: v for k, v in os.environ.items() if k not in ("ENGRAM_ACTIVE", "ENGRAM_SESSION_ID", "GENTLE_AI_ACTIVE", "DISABLE_AUTOINVOKE")}
+            env_clean = {
+                k: v
+                for k, v in os.environ.items()
+                if k not in ("ENGRAM_ACTIVE", "ENGRAM_SESSION_ID", "GENTLE_AI_ACTIVE", "DISABLE_AUTOINVOKE")
+            }
             with patch.dict(os.environ, env_clean, clear=True):
                 with patch.dict(os.environ, {"ENGRAM_ACTIVE": "1"}, clear=False):
                     result = detect(cwd=tmp)
@@ -59,7 +67,11 @@ class TestDetectStackType:
     def test_engram_session_id_signal(self):
         """ENGRAM_SESSION_ID set → ORCHESTRATOR."""
         with tempfile.TemporaryDirectory() as tmp:
-            env_clean = {k: v for k, v in os.environ.items() if k not in ("ENGRAM_ACTIVE", "ENGRAM_SESSION_ID", "GENTLE_AI_ACTIVE", "DISABLE_AUTOINVOKE")}
+            env_clean = {
+                k: v
+                for k, v in os.environ.items()
+                if k not in ("ENGRAM_ACTIVE", "ENGRAM_SESSION_ID", "GENTLE_AI_ACTIVE", "DISABLE_AUTOINVOKE")
+            }
             with patch.dict(os.environ, env_clean, clear=True):
                 with patch.dict(os.environ, {"ENGRAM_SESSION_ID": "test-session-123"}, clear=False):
                     result = detect(cwd=tmp)
@@ -70,7 +82,11 @@ class TestDetectStackType:
         """GENTLE_AI_ACTIVE=1 alone (no .gga needed) → ORCHESTRATOR."""
         with tempfile.TemporaryDirectory() as tmp:
             # No .gga file, just the env var
-            env_clean = {k: v for k, v in os.environ.items() if k not in ("GENTLE_AI_ACTIVE", "ENGRAM_ACTIVE", "ENGRAM_SESSION_ID", "DISABLE_AUTOINVOKE")}
+            env_clean = {
+                k: v
+                for k, v in os.environ.items()
+                if k not in ("GENTLE_AI_ACTIVE", "ENGRAM_ACTIVE", "ENGRAM_SESSION_ID", "DISABLE_AUTOINVOKE")
+            }
             with patch.dict(os.environ, env_clean, clear=True):
                 with patch.dict(os.environ, {"GENTLE_AI_ACTIVE": "1"}, clear=False):
                     result = detect(cwd=tmp)

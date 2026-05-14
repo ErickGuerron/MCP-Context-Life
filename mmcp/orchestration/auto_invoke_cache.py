@@ -162,9 +162,7 @@ class AutoInvokeCache:
                 "skipped_too_large": self._stats.skipped_too_large,
             }
 
-    def get_or_execute(
-        self, key: str, execute_fn: Callable[[], Any]
-    ) -> Any:
+    def get_or_execute(self, key: str, execute_fn: Callable[[], Any]) -> Any:
         """
         Get cached result or execute if not cached.
 

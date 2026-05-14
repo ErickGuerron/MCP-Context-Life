@@ -39,6 +39,7 @@ class SessionPersistence:
         # Check feature flag - import each time to allow patching
         try:
             from mmcp.infrastructure.environment.config import get_config
+
             cfg = get_config()
             self._enabled = cfg.cross_session_state_enabled
         except Exception:
@@ -47,6 +48,7 @@ class SessionPersistence:
         # Resolve db path
         if db_path is None:
             from mmcp.infrastructure.environment.config import get_config
+
             cfg = get_config()
             self._db_path: Path = cfg.resolve_cache_db_path()
         else:
@@ -130,16 +132,22 @@ class SessionPersistence:
                 try:
                     json.loads(state_json)
                     # Upsert into session_state
-                    cursor.execute("""
+                    cursor.execute(
+                        """
                         INSERT OR REPLACE INTO session_state (session_id, state_json, updated_at)
                         VALUES (?, ?, ?)
-                    """, (session_id, state_json, timestamp))
+                    """,
+                        (session_id, state_json, timestamp),
+                    )
                     # Mark journal entry as replayed (not archived, but state now in session_state)
                 except (json.JSONDecodeError, TypeError):
                     # Archive corrupted journal entry
-                    cursor.execute("""
+                    cursor.execute(
+                        """
                         UPDATE session_journal SET archived = 1 WHERE id = ?
-                    """, (entry_id,))
+                    """,
+                        (entry_id,),
+                    )
 
             conn.commit()
         finally:
@@ -181,16 +189,22 @@ class SessionPersistence:
             cursor.execute("BEGIN IMMEDIATE")
             try:
                 # Append to journal
-                cursor.execute("""
+                cursor.execute(
+                    """
                     INSERT INTO session_journal (session_id, state_json, timestamp, archived)
                     VALUES (?, ?, ?, 0)
-                """, (session_id, state_json, ts))
+                """,
+                    (session_id, state_json, ts),
+                )
 
                 # Update current state
-                cursor.execute("""
+                cursor.execute(
+                    """
                     INSERT OR REPLACE INTO session_state (session_id, state_json, updated_at)
                     VALUES (?, ?, ?)
-                """, (session_id, state_json, ts))
+                """,
+                    (session_id, state_json, ts),
+                )
 
                 conn.commit()
             except Exception:
@@ -212,9 +226,12 @@ class SessionPersistence:
         conn = self._get_connection()
         try:
             cursor = conn.cursor()
-            cursor.execute("""
+            cursor.execute(
+                """
                 SELECT state_json FROM session_state WHERE session_id = ?
-            """, (session_id,))
+            """,
+                (session_id,),
+            )
             row = cursor.fetchone()
 
             if row is None:
@@ -230,9 +247,7 @@ class SessionPersistence:
         finally:
             conn.close()
 
-    def save_workspace_fingerprint(
-        self, session_id: str, base_prefix_hash: str, rag_hash: str
-    ) -> None:
+    def save_workspace_fingerprint(self, session_id: str, base_prefix_hash: str, rag_hash: str) -> None:
         """Persist workspace fingerprint (base prefix hash, RAG hash) for session."""
         if not self._enabled:
             return
@@ -241,14 +256,17 @@ class SessionPersistence:
         try:
             cursor = conn.cursor()
             # Upsert fingerprint into session_state
-            cursor.execute("""
+            cursor.execute(
+                """
                 INSERT INTO session_state (session_id, state_json, updated_at, base_prefix_hash, rag_hash)
                 VALUES (?, '{}', ?, ?, ?)
                 ON CONFLICT(session_id) DO UPDATE SET
                     base_prefix_hash = excluded.base_prefix_hash,
                     rag_hash = excluded.rag_hash,
                     updated_at = excluded.updated_at
-            """, (session_id, time.time(), base_prefix_hash, rag_hash))
+            """,
+                (session_id, time.time(), base_prefix_hash, rag_hash),
+            )
             conn.commit()
         finally:
             conn.close()
@@ -261,10 +279,13 @@ class SessionPersistence:
         conn = self._get_connection()
         try:
             cursor = conn.cursor()
-            cursor.execute("""
+            cursor.execute(
+                """
                 SELECT base_prefix_hash, rag_hash FROM session_state
                 WHERE session_id = ? AND (base_prefix_hash IS NOT NULL OR rag_hash IS NOT NULL)
-            """, (session_id,))
+            """,
+                (session_id,),
+            )
             row = cursor.fetchone()
             if row:
                 return {

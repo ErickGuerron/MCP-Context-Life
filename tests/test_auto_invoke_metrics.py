@@ -119,9 +119,11 @@ class TestAutoInvokeMetrics:
 
         class EnabledConfig:
             usage_tracking_enabled = True
+
             def resolve_cache_db_path(self):
                 import tempfile
                 from pathlib import Path
+
                 return Path(tempfile.gettempdir()) / "test_context_life.db"
 
         config_module.get_config = lambda: EnabledConfig()
@@ -217,11 +219,13 @@ class TestAutoInvokeMetricsBypass:
 
         # Create a fresh config with usage_tracking disabled
         from mmcp.infrastructure.environment.config import CLConfig
+
         config = CLConfig()
         config.usage_tracking_enabled = False
 
         # Temporarily patch get_config to return disabled config
         import mmcp.infrastructure.environment.config as config_module
+
         original_get_config = config_module.get_config
 
         class FakeConfig:

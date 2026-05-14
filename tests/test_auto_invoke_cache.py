@@ -181,9 +181,7 @@ class TestAutoInvokeCacheDeduplication:
 
         threads = []
         for _ in range(3):
-            t = threading.Thread(
-                target=lambda: results_received.append(cache.get_or_execute(key, slow_execute))
-            )
+            t = threading.Thread(target=lambda: results_received.append(cache.get_or_execute(key, slow_execute)))
             threads.append(t)
 
         for t in threads:
@@ -223,15 +221,11 @@ class TestAutoInvokeCacheManagement:
         cache = AutoInvokeCache(ttl_seconds=60)
 
         cache.set(
-            cache._derive_key(
-                host="localhost", agent="a", provider="openai", model="gpt-4", operation="c", args={}
-            ),
+            cache._derive_key(host="localhost", agent="a", provider="openai", model="gpt-4", operation="c", args={}),
             {"content": "a"},
         )
         cache.set(
-            cache._derive_key(
-                host="localhost", agent="b", provider="openai", model="gpt-4", operation="c", args={}
-            ),
+            cache._derive_key(host="localhost", agent="b", provider="openai", model="gpt-4", operation="c", args={}),
             {"content": "b"},
         )
 

@@ -568,7 +568,9 @@ class TestMultiStackDetection:
                 mock_process.pid = 1234
                 mock_process.info = {"name": "codex-cli.exe"}
                 with patch.object(config_module, "get_config", return_value=mock_config):
-                    with patch("mmcp.infrastructure.environment.orchestrator_detector.psutil.process_iter") as mock_iter:
+                    with patch(
+                        "mmcp.infrastructure.environment.orchestrator_detector.psutil.process_iter"
+                    ) as mock_iter:
                         mock_iter.return_value = [mock_process]
                         result = _check_multi_stack()
 

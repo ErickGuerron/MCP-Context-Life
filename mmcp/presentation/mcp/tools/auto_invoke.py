@@ -59,23 +59,27 @@ def autoinvoke_context(stack_type: str) -> str:
     # Validate stack_type
     valid_types = {"solo-agent", "orchestrator"}
     if stack_type not in valid_types:
-        return json.dumps({
-            "error": f"Invalid stack_type '{stack_type}'. Must be one of: {valid_types}",
-            "stack_type_received": stack_type
-        })
+        return json.dumps(
+            {
+                "error": f"Invalid stack_type '{stack_type}'. Must be one of: {valid_types}",
+                "stack_type_received": stack_type,
+            }
+        )
 
     # Bypass if DISABLE_AUTOINVOKE=1
     if os.environ.get("DISABLE_AUTOINVOKE") == "1":
-        return json.dumps({
-            "status": "bypassed",
-            "reason": "DISABLE_AUTOINVOKE=1",
-            "stack_type": stack_type,
-            "active_session_id": None,
-            "context_items": [],
-            "session_state": {"current": "idle"},
-            "recommendations": ["Proceed with normal agent workflow"],
-            "level": "LIGHT"
-        })
+        return json.dumps(
+            {
+                "status": "bypassed",
+                "reason": "DISABLE_AUTOINVOKE=1",
+                "stack_type": stack_type,
+                "active_session_id": None,
+                "context_items": [],
+                "session_state": {"current": "idle"},
+                "recommendations": ["Proceed with normal agent workflow"],
+                "level": "LIGHT",
+            }
+        )
 
     # Detect actual stack type
     detected_stack = detect_stack()
@@ -114,15 +118,9 @@ def autoinvoke_context(stack_type: str) -> str:
             "stack_type_detected": "solo-agent",
             "active_session_id": session_id,
             "context_items": [],
-            "session_state": {
-                "current": sm.get_current_state().value,
-                "mode": "solo-agent"
-            },
-            "recommendations": [
-                "Call intercept_user_request for context extraction",
-                "Proceed with task execution"
-            ],
-            "level": "REQUIRED"
+            "session_state": {"current": sm.get_current_state().value, "mode": "solo-agent"},
+            "recommendations": ["Call intercept_user_request for context extraction", "Proceed with task execution"],
+            "level": "REQUIRED",
         }
     else:
         # Orchestrator: delegate to context-life-advisor
@@ -131,15 +129,9 @@ def autoinvoke_context(stack_type: str) -> str:
             "stack_type_detected": "orchestrator",
             "active_session_id": session_id,
             "context_items": [],
-            "session_state": {
-                "current": sm.get_current_state().value,
-                "mode": "orchestrator"
-            },
-            "recommendations": [
-                "Delegate to context-life-advisor sub-agent",
-                "Await ContextPack from advisor"
-            ],
-            "level": "REQUIRED"
+            "session_state": {"current": sm.get_current_state().value, "mode": "orchestrator"},
+            "recommendations": ["Delegate to context-life-advisor sub-agent", "Await ContextPack from advisor"],
+            "level": "REQUIRED",
         }
 
     return json.dumps(response)

@@ -107,12 +107,15 @@ class TestSessionPersistence:
             # Corrupt both the state AND the journal with invalid JSON
             # so journal_replay cannot recover
             import sqlite3
+
             conn = sqlite3.connect(db_path)
-            conn.execute("UPDATE session_state SET state_json = ? WHERE session_id = ?",
-                         ("NOT_VALID_JSON{{{", "session-4"))
+            conn.execute(
+                "UPDATE session_state SET state_json = ? WHERE session_id = ?", ("NOT_VALID_JSON{{{", "session-4")
+            )
             # Also corrupt the journal - insert a bad entry that will cause journal_replay to fail
-            conn.execute("UPDATE session_journal SET state_json = ? WHERE session_id = ?",
-                         ("ALSO_INVALID{{{", "session-4"))
+            conn.execute(
+                "UPDATE session_journal SET state_json = ? WHERE session_id = ?", ("ALSO_INVALID{{{", "session-4")
+            )
             conn.commit()
             conn.close()
 

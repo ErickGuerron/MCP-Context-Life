@@ -108,6 +108,7 @@ class TestContextSliceLazyModuleLoading:
 
     def test_lazy_loader_cleared(self):
         """Lazy loader can be cleared."""
+
         def mock_loader():
             pass
 
@@ -115,6 +116,7 @@ class TestContextSliceLazyModuleLoading:
         _clear_lazy_loader()
 
         from mmcp.domain.context_slice import _get_lazy_loader
+
         assert _get_lazy_loader() is None
 
 

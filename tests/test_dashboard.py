@@ -1,4 +1,5 @@
 """Tests for Phase 7 — Governance helpers integrated into existing telemetry view."""
+
 import time
 from unittest.mock import MagicMock, patch
 

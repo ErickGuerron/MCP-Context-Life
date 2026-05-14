@@ -212,7 +212,9 @@ class TestOverheadVerification:
         """RED: AutoInvokeTracker.log() adds < 5ms overhead per invocation."""
         from mmcp.infrastructure.telemetry.auto_invoke_tracker import AutoInvokeTracker
 
-        def noop_log(event): None
+        def noop_log(event):
+            None
+
         tracker = AutoInvokeTracker(log_func=noop_log)
 
         # Warm up
