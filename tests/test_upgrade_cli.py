@@ -72,9 +72,10 @@ def test_cli_upgrade_delegates_to_dedicated_flow(monkeypatch):
 def test_upgrade_menu_item_keeps_tui_modal():
     menu = cli._build_config_menu()
 
-    # Config Model was inserted at index 2, Upgrade is now at index 3
-    assert menu.items[3].label == "Upgrade Context-Life"
-    assert menu.items[3].keep_tui is True
+    # Config menu order: RAG Warmup, Governance, Install, Config Model, Upgrade
+    # Governance was inserted at index 1, so Upgrade is now at index 4
+    assert menu.items[4].label == "Upgrade Context-Life"
+    assert menu.items[4].keep_tui is True
 
 
 def test_menu_action_can_keep_tui(monkeypatch):

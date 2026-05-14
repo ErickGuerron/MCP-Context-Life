@@ -466,6 +466,7 @@ def do_doctor():
 def _build_telemetry_content():
     from mmcp.infrastructure.environment.config import get_config
     from mmcp.infrastructure.persistence.session_store import SessionStore
+    from mmcp.presentation.cli.dashboard import get_governance_info, format_governance_rows
 
     cfg = get_config()
     store = SessionStore(cfg.resolve_cache_db_path())
@@ -494,6 +495,12 @@ def _build_telemetry_content():
         if len(sorted_models) > 6:
             usage_lines.append(f"[dim]+ {len(sorted_models) - 6} more model(s) not shown[/]")
 
+    governance_rows: list[tuple[str, str]] = []
+    if cfg.governance_dashboard_enabled:
+        gov_info = get_governance_info()
+        if gov_info:
+            governance_rows = format_governance_rows(gov_info)
+
     return _stack_renderables(
         _compact_panel(
             "💰 Telemetry",
@@ -502,6 +509,7 @@ def _build_telemetry_content():
                 ("Output", format_big_number(output_tokens)),
                 ("Saved / reused", f"[green]{format_big_number(saved_tokens)}[/]"),
                 ("Savings vs input", f"[bold green]{savings_pct:.1f}%[/]"),
+                *governance_rows,
             ],
             border_style="green",
         ),
@@ -531,6 +539,7 @@ def _build_telemetry_content():
 def _build_telemetry_pages() -> list[DetailPage]:
     from mmcp.infrastructure.environment.config import get_config
     from mmcp.infrastructure.persistence.session_store import SessionStore
+    from mmcp.presentation.cli.dashboard import get_governance_info, format_governance_rows
 
     cfg = get_config()
     store = SessionStore(cfg.resolve_cache_db_path())
@@ -557,6 +566,12 @@ def _build_telemetry_pages() -> list[DetailPage]:
                 f"output {format_big_number(transformed)} • saved {format_big_number(saved)}"
             )
 
+    governance_rows: list[tuple[str, str]] = []
+    if cfg.governance_dashboard_enabled:
+        gov_info = get_governance_info()
+        if gov_info:
+            governance_rows = format_governance_rows(gov_info)
+
     return [
         DetailPage(
             title="Overview",
@@ -568,6 +583,7 @@ def _build_telemetry_pages() -> list[DetailPage]:
                         ("Output", format_big_number(output_tokens)),
                         ("Saved / reused", f"[green]{format_big_number(saved_tokens)}[/]"),
                         ("Savings vs input", f"[bold green]{savings_pct:.1f}%[/]"),
+                        *governance_rows,
                     ],
                     border_style="green",
                 ),

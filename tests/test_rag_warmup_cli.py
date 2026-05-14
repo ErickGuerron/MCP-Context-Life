@@ -28,6 +28,7 @@ from mmcp.presentation.cli.cli import (
     _resolve_detail_layout,
     _set_warmup_mode_and_return,
 )
+from mmcp.presentation.cli.diagnostics import _build_telemetry_content as _build_diagnostics_telemetry_content
 
 
 def _render_text(renderable) -> str:
@@ -530,6 +531,40 @@ def test_telemetry_dashboard_uses_explicit_accounting_labels(isolated_data_dir):
     assert "default request budget" in text
     assert "mcp tool calls only" in text
     assert "per-model budget" not in text
+
+
+def test_telemetry_dashboard_shows_governance_in_overview_panel(isolated_data_dir, monkeypatch):
+    cfg = get_config()
+    cfg.governance_dashboard_enabled = True
+
+    monkeypatch.setattr(
+        "mmcp.presentation.cli.dashboard.get_governance_info",
+        lambda: {"cache_status": "warm", "governance_priority": "high", "is_stale": False},
+    )
+
+    text = _render_text(_build_telemetry_content())
+
+    assert "governance" in text
+    assert "cache:" in text
+    assert "priority:" in text
+    assert text.index("governance") < text.index("budget reference")
+
+
+def test_diagnostics_telemetry_shows_governance_in_overview_panel(isolated_data_dir, monkeypatch):
+    cfg = get_config()
+    cfg.governance_dashboard_enabled = True
+
+    monkeypatch.setattr(
+        "mmcp.presentation.cli.dashboard.get_governance_info",
+        lambda: {"cache_status": "warm", "governance_priority": "high", "is_stale": False},
+    )
+
+    text = _render_text(_build_diagnostics_telemetry_content())
+
+    assert "governance" in text
+    assert "cache:" in text
+    assert "priority:" in text
+    assert text.index("governance") < text.index("budget reference")
 
 
 def test_telemetry_dashboard_overview_uses_rolling_week_window(isolated_data_dir):

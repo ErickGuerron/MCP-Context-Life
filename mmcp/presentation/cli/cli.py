@@ -145,6 +145,13 @@ def _current_advisor_model_label() -> str:
     return model or "Not set"
 
 
+def _current_governance_label() -> str:
+    """Read the current governance dashboard state for inline config labels."""
+    from mmcp.infrastructure.environment.config import get_config
+
+    return "On" if get_config().governance_dashboard_enabled else "Off"
+
+
 def _render_renderable_to_lines(renderable, width: int) -> list[str]:
     """Pre-render a Rich renderable into ANSI-safe lines."""
     temp_buffer = StringIO()
@@ -1096,6 +1103,69 @@ def _build_warmup_menu() -> MenuScreen:
     )
 
 
+def _toggle_governance_dashboard_and_return(enable: bool) -> MenuActionResult:
+    """Toggle governance dashboard and return to Config.
+
+    Also enables usage_tracking so governance info is visible in telemetry.
+    """
+    from mmcp.infrastructure.environment.config import get_config, save_config
+
+    cfg = get_config()
+    cfg.governance_dashboard_enabled = enable
+    # Opción 1: unificar toggles — governance ON activa tracking para que el governant muestre datos
+    cfg.usage_tracking_enabled = enable
+    path = save_config(cfg)
+    state = "enabled" if enable else "disabled"
+    return MenuActionResult(
+        back_levels=1,
+        notice=f"[bold]Governance dashboard:[/] [green]{state}[/]\n[dim]Saved in {path}[/]",
+    )
+
+
+def _toggle_governance_dashboard() -> MenuActionResult:
+    """Toggle governance dashboard between on/off and return to Config.
+
+    Also toggles usage_tracking so governance info is always visible when dashboard is on.
+    """
+    from mmcp.infrastructure.environment.config import get_config, save_config
+
+    cfg = get_config()
+    new_state = not cfg.governance_dashboard_enabled
+    cfg.governance_dashboard_enabled = new_state
+    cfg.usage_tracking_enabled = new_state
+    path = save_config(cfg)
+    state = "enabled" if new_state else "disabled"
+    return MenuActionResult(
+        back_levels=1,
+        notice=f"[bold]Governance dashboard:[/] [green]{state}[/]\n[dim]Saved in {path}[/]",
+    )
+
+
+def _build_governance_menu() -> MenuScreen:
+    """Governance submenu integrated into the stateful TUI."""
+    from mmcp.infrastructure.environment.config import get_config
+
+    current = get_config().governance_dashboard_enabled
+    current_label = "[green]On[/]" if current else "[red]Off[/]"
+    action_label = "Disable" if current else "Enable"
+
+    return MenuScreen(
+        title="Config / Governance",
+        subtitle="Toggle governance metrics display in the Telemetry view.",
+        items=[
+            MenuItem(
+                f"Governance: {current_label} (current)",
+                "Cache status, priority tier, and staleness in Telemetry.",
+            ),
+            MenuItem(
+                f"{action_label} Governance",
+                f"Switch to {'Off' if current else 'On'}.",
+                _toggle_governance_dashboard,
+            ),
+        ],
+    )
+
+
 def _build_config_menu() -> MenuScreen:
     """First-level configuration section."""
     return MenuScreen(
@@ -1107,6 +1177,12 @@ def _build_config_menu() -> MenuScreen:
                 "Open the integrated warmup selector and status screens.",
                 submenu=_build_warmup_menu(),
                 inline_value=_current_warmup_mode_label,
+            ),
+            MenuItem(
+                "Governance",
+                "Toggle governance metrics display in Telemetry view.",
+                submenu=_build_governance_menu(),
+                inline_value=_current_governance_label,
             ),
             MenuItem(
                 "Install Context-Life",
@@ -2065,6 +2141,7 @@ def _build_telemetry_content():
     """Build the compact telemetry dashboard renderables (does NOT print)."""
     from mmcp.infrastructure.environment.config import get_config
     from mmcp.infrastructure.persistence.session_store import SessionStore
+    from mmcp.presentation.cli.dashboard import get_governance_info, format_governance_rows
 
     cfg = get_config()
     store = SessionStore(cfg.resolve_cache_db_path())
@@ -2093,6 +2170,20 @@ def _build_telemetry_content():
         if len(sorted_models) > 6:
             usage_lines.append(f"[dim]+ {len(sorted_models) - 6} more model(s) not shown[/]")
 
+    governance_rows: list[tuple[str, str]] = []
+    # Build notes for compact context; governance is shown in the main overview panel.
+    notes_lines: list[str] = [
+        "Rolling 7-day window recalculates automatically.",
+        "Telemetry tracks Context-Life MCP tool calls only, not host LLM billing/cache telemetry.",
+        "Input/output/saved now use explicit accounting semantics.",
+        "Budget is a per-request reference ceiling, not a weekly quota.",
+    ]
+
+    if cfg.governance_dashboard_enabled:
+        gov_info = get_governance_info()
+        if gov_info:
+            governance_rows = format_governance_rows(gov_info)
+
     return _stack_renderables(
         _compact_panel(
             "💰 Telemetry",
@@ -2101,6 +2192,7 @@ def _build_telemetry_content():
                 ("Output", format_big_number(output_tokens)),
                 ("Saved / reused", f"[green]{format_big_number(saved_tokens)}[/]"),
                 ("Savings vs input", f"[bold green]{savings_pct:.1f}%[/]"),
+                *governance_rows,
             ],
             border_style="green",
         ),
@@ -2114,16 +2206,7 @@ def _build_telemetry_content():
             border_style="blue",
         ),
         _compact_list_panel("Model usage", usage_lines, border_style="cyan"),
-        _compact_list_panel(
-            "Notes",
-            [
-                "Rolling 7-day window recalculates automatically.",
-                "Telemetry tracks Context-Life MCP tool calls only, not host LLM billing/cache telemetry.",
-                "Input/output/saved now use explicit accounting semantics.",
-                "Budget is a per-request reference ceiling, not a weekly quota.",
-            ],
-            border_style="dim",
-        ),
+        _compact_list_panel("Notes", notes_lines, border_style="dim"),
     )
 
 
@@ -2131,6 +2214,7 @@ def _build_telemetry_pages() -> list[DetailPage]:
     """Split telemetry into overview and per-model usage pages."""
     from mmcp.infrastructure.environment.config import get_config
     from mmcp.infrastructure.persistence.session_store import SessionStore
+    from mmcp.presentation.cli.dashboard import get_governance_info, format_governance_rows
 
     cfg = get_config()
     store = SessionStore(cfg.resolve_cache_db_path())
@@ -2157,6 +2241,12 @@ def _build_telemetry_pages() -> list[DetailPage]:
                 f"output {format_big_number(transformed)} • saved {format_big_number(saved)}"
             )
 
+    governance_rows: list[tuple[str, str]] = []
+    if cfg.governance_dashboard_enabled:
+        gov_info = get_governance_info()
+        if gov_info:
+            governance_rows = format_governance_rows(gov_info)
+
     return [
         DetailPage(
             title="Overview",
@@ -2168,6 +2258,7 @@ def _build_telemetry_pages() -> list[DetailPage]:
                         ("Output", format_big_number(output_tokens)),
                         ("Saved / reused", f"[green]{format_big_number(saved_tokens)}[/]"),
                         ("Savings vs input", f"[bold green]{savings_pct:.1f}%[/]"),
+                        *governance_rows,
                     ],
                     border_style="green",
                 ),

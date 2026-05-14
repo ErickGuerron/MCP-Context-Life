@@ -74,13 +74,23 @@ Chain strategy: pending
 - [x] 6.5 Add workspace fingerprint persistence (base prefix hash, RAG hash)
 - [x] 6.6 RED: Write failing test for `cross_session_state.enabled: false` memory-only mode
 
-## Phase 7: Governance Dashboard (`mmcp/presentation/cli/dashboard.py`)
+## Phase 7: Telemetry Enhancement — Governance Metrics (No Separate Dashboard)
 
-- [ ] 7.1 RED: Write failing test for dashboard `Panel` render with governance metrics
-- [ ] 7.2 GREEN: Create `dashboard.py` using existing `rich` infrastructure — session age, token count vs budget, cache warm/cold, invoke count, last save, active triggers, governance priority
-- [ ] 7.3 GREEN: Add staleness indicator when metrics not updated in 60s
-- [ ] 7.4 REFACTOR: Handle load failure with "No data available" placeholder
-- [ ] 7.5 RED: Write failing test for `governance_dashboard.enabled: false` hidden panel
+**Approach**: Integrate governance/cache metrics INTO the existing telemetry view
+(`_build_telemetry_content()` in `cli.py`) WITHOUT a separate dashboard panel.
+Tasteful enhancement — does NOT saturate or damage the existing telemetry view.
+
+Enhancements to add to existing telemetry panels (as compact info lines):
+- Cache warm/cold status indicator
+- Governance priority tier (low/medium/high)
+- Staleness warning if metrics stale >60s
+- Auto-invoke count (if usage_tracking_enabled)
+
+- [x] 7.1 RED: Write failing test confirming existing telemetry renders unchanged (no regressions)
+- [x] 7.2 GREEN: Add governance info lines to `_build_telemetry_content()` — cache status, priority tier, staleness
+- [x] 7.3 REFACTOR: Add governance info to telemetry only when `governance_dashboard.enabled: true`
+- [x] 7.4 REFACTOR: Staleness indicator shows only when metrics stale > 60s
+- [x] 7.5 GREEN: Add `usage_tracking.enabled: false` graceful bypass — governance lines hidden when tracking off
 
 ## Phase 8: Telemetry Integration (`mmcp/infrastructure/telemetry/auto_invoke_tracker.py`)
 
