@@ -94,11 +94,11 @@ Enhancements to add to existing telemetry panels (as compact info lines):
 
 ## Phase 8: Telemetry Integration (`mmcp/infrastructure/telemetry/auto_invoke_tracker.py`)
 
-- [ ] 8.1 RED: Write failing test for `UsageEvent` construction with `event_type="auto_invoke"`, `accounting_mode="derived"`
-- [ ] 8.2 GREEN: Implement `auto_invoke_tracker.py` constructing `UsageEvent` and passing to `TelemetryService.log_usage()` via background thread queue
-- [ ] 8.3 GREEN: Add queue retry logic when `TelemetryService` unavailable, log warning (not error)
-- [ ] 8.4 REFACTOR: Verify overhead < 5ms per invocation
-- [ ] 8.5 RED: Write failing test for `telemetry.integration.auto_invoke: false` bypass
+- [x] 8.1 RED: Write failing test for `UsageEvent` construction with `event_type="auto_invoke"`, `accounting_mode="derived"`
+- [x] 8.2 GREEN: Implement `auto_invoke_tracker.py` constructing `UsageEvent` and passing to `TelemetryService.log_usage()` via background thread queue
+- [x] 8.3 GREEN: Add queue retry logic when `TelemetryService` unavailable, log warning (not error)
+- [x] 8.4 REFACTOR: Verify overhead < 5ms per invocation
+- [x] 8.5 RED: Write failing test for `telemetry.integration.auto_invoke: false` bypass
 
 ## Phase 9: Context Slice Enhancement (`mmcp/domain/context_slice.py` or extend existing)
 

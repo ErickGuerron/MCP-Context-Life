@@ -10,6 +10,8 @@ class UsageEvent:
     """Normalized usage telemetry event."""
 
     session_id: str
+    event_type: str = "standard"
+    accounting_mode: str = "captured"
     input_tokens: int = 0
     output_tokens: int = 0
     cached_input_tokens: int = 0
