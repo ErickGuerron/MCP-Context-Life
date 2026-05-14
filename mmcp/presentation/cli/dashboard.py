@@ -105,7 +105,10 @@ def format_governance_rows(info: dict[str, Any]) -> list[tuple[str, str]]:
     priority_color = "red" if priority == "high" else "yellow" if priority == "medium" else "green"
 
     rows: list[tuple[str, str]] = [
-        ("Governance", f"Cache: [{status_color}]{status.upper()}[/] | Priority: [{priority_color}]{priority.upper()}[/]")
+        (
+            "Governance",
+            f"Cache: [{status_color}]{status.upper()}[/] | Priority: [{priority_color}]{priority.upper()}[/]",
+        )
     ]
 
     if info.get("is_stale"):

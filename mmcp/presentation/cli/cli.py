@@ -501,11 +501,13 @@ def _menu_header_renderable(path: str, subtitle: str, latest_version: str | None
     if _menu_chrome_is_compact():
         header_lines = [f"[bold white]{path}[/]", f"[dim]{subtitle}[/]"]
         if latest_version:
-            header_lines.extend([
-                "",
-                f"[bold yellow]New version available:[/] v{latest_version}",
-                "[dim]Open Config → Upgrade Context-Life to install it.[/]",
-            ])
+            header_lines.extend(
+                [
+                    "",
+                    f"[bold yellow]New version available:[/] v{latest_version}",
+                    "[dim]Open Config → Upgrade Context-Life to install it.[/]",
+                ]
+            )
         return Text.from_markup("\n".join(header_lines))
 
     return _build_tui_header(path, subtitle, latest_version)
@@ -1682,10 +1684,12 @@ def _build_advisor_model_menu(
     items.append(
         MenuItem(
             label="OpenCode Zen",
-            description=f"{len(ZEN_MODELS)} models available" + (" ✓ connected" if zen_connected else " ✗ not connected"),
+            description=f"{len(ZEN_MODELS)} models available"
+            + (" ✓ connected" if zen_connected else " ✗ not connected"),
             submenu=MenuScreen(
                 title="Select OpenCode Zen Model",
-                subtitle="Curated models with pricing info" + (" ✓ connected" if zen_connected else " ✗ not connected — free only"),
+                subtitle="Curated models with pricing info"
+                + (" ✓ connected" if zen_connected else " ✗ not connected — free only"),
                 items=zen_subitems,
             ),
         )
@@ -1698,9 +1702,7 @@ def _build_advisor_model_menu(
         for m in local_models:
             if m.provider != current_provider:
                 current_provider = m.provider
-                local_subitems.append(
-                    MenuItem(label=f"  ─ {current_provider.upper()} ─", description="", action=None)
-                )
+                local_subitems.append(MenuItem(label=f"  ─ {current_provider.upper()} ─", description="", action=None))
             local_subitems.append(
                 MenuItem(
                     label=_label_with_current(f"  {m.model_id}", m.full_name),
@@ -1712,13 +1714,13 @@ def _build_advisor_model_menu(
             MenuItem(
                 label="Local Providers",
                 description=f"{len(local_models)} local models configured",
-            submenu=MenuScreen(
-                title="Select Local Model",
-                subtitle="Locally hosted models (e.g. Ollama)",
-                items=local_subitems,
-            ),
+                submenu=MenuScreen(
+                    title="Select Local Model",
+                    subtitle="Locally hosted models (e.g. Ollama)",
+                    items=local_subitems,
+                ),
+            )
         )
-    )
 
     return MenuScreen(title=title, subtitle=subtitle, items=items)
 
@@ -1763,10 +1765,7 @@ def _configure_advisor_model(model: str) -> MenuActionResult:
         write_advisor_config_to_opencode(home, config)
         return MenuActionResult(
             back_levels=2,
-            notice=(
-                f"[bold green]✓ context-life-advisor model updated[/]\n"
-                f"[dim]Model: {model}[/]"
-            ),
+            notice=(f"[bold green]✓ context-life-advisor model updated[/]\n[dim]Model: {model}[/]"),
         )
     except Exception as exc:
         return MenuActionResult(

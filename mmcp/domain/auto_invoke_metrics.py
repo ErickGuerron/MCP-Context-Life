@@ -12,7 +12,7 @@ from __future__ import annotations
 
 import queue
 import threading
-from typing import Any
+from typing import Any, Optional
 
 from mmcp.domain.models import UsageEvent
 from mmcp.infrastructure.environment import config as config_module

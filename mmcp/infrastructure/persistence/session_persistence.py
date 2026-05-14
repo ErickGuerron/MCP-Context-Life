@@ -132,7 +132,7 @@ class SessionPersistence:
             for row in cursor.fetchall():
                 entry_id, session_id, state_json, timestamp = row
                 try:
-                    state = json.loads(state_json)
+                    json.loads(state_json)
                     # Upsert into session_state
                     cursor.execute("""
                         INSERT OR REPLACE INTO session_state (session_id, state_json, updated_at)

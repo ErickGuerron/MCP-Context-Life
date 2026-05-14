@@ -69,18 +69,45 @@ class ZenModel:
 
 # OpenCode Zen curated models with pricing info
 ZEN_MODELS: list[ZenModel] = [
-    ZenModel(model_id="opencode/qwen3:8b", display_name="Qwen 3.6 Plus", is_free=False, description="General purpose coder"),
+    ZenModel(
+        model_id="opencode/qwen3:8b", display_name="Qwen 3.6 Plus", is_free=False, description="General purpose coder"
+    ),
     ZenModel(model_id="opencode/qwen3:4b", display_name="Qwen 3.4", is_free=False, description="Compact coder model"),
-    ZenModel(model_id="opencode/big-pickle", display_name="Big Pickle", is_free=True, description="Free - limited time"),
-    ZenModel(model_id="opencode/minimax-m2.7", display_name="MiniMax M2.7", is_free=False, description="High capability coder"),
-    ZenModel(model_id="opencode/minimax-m2.5", display_name="MiniMax M2.5", is_free=False, description="Mid-range coder"),
-    ZenModel(model_id="opencode/minimax-m2.5-free", display_name="MiniMax M2.5 Free", is_free=True, description="Free tier"),
+    ZenModel(
+        model_id="opencode/big-pickle", display_name="Big Pickle", is_free=True, description="Free - limited time"
+    ),
+    ZenModel(
+        model_id="opencode/minimax-m2.7",
+        display_name="MiniMax M2.7",
+        is_free=False,
+        description="High capability coder",
+    ),
+    ZenModel(
+        model_id="opencode/minimax-m2.5", display_name="MiniMax M2.5", is_free=False, description="Mid-range coder"
+    ),
+    ZenModel(
+        model_id="opencode/minimax-m2.5-free", display_name="MiniMax M2.5 Free", is_free=True, description="Free tier"
+    ),
     ZenModel(model_id="opencode/glm-5", display_name="GLM 5", is_free=False, description="GLM latest"),
     ZenModel(model_id="opencode/kimi-k2.6", display_name="Kimi K2.6", is_free=False, description="Kimi latest"),
-    ZenModel(model_id="opencode/kimi-k2.5", display_name="Kimi K2.5", is_free=False, description="Kimi previous version"),
-    ZenModel(model_id="opencode/ling-2.6-flash-free", display_name="Ling 2.6 Flash Free", is_free=True, description="Free input/output/cached"),
-    ZenModel(model_id="opencode/hy3-preview-free", display_name="Hy3 Preview Free", is_free=True, description="Free preview"),
-    ZenModel(model_id="opencode/nemotron-3-super-free", display_name="Nemotron 3 Super Free", is_free=True, description="Free input/output/cached"),
+    ZenModel(
+        model_id="opencode/kimi-k2.5", display_name="Kimi K2.5", is_free=False, description="Kimi previous version"
+    ),
+    ZenModel(
+        model_id="opencode/ling-2.6-flash-free",
+        display_name="Ling 2.6 Flash Free",
+        is_free=True,
+        description="Free input/output/cached",
+    ),
+    ZenModel(
+        model_id="opencode/hy3-preview-free", display_name="Hy3 Preview Free", is_free=True, description="Free preview"
+    ),
+    ZenModel(
+        model_id="opencode/nemotron-3-super-free",
+        display_name="Nemotron 3 Super Free",
+        is_free=True,
+        description="Free input/output/cached",
+    ),
 ]
 
 
@@ -406,9 +433,7 @@ def verify_install(target_key: str, home_dir: Path) -> tuple[bool, bool, str]:
 
     all_skills = get_all_skill_source_dirs()
     skill_names = [s.name for s in all_skills]
-    skill_ok = all_skills and skill_base and all(
-        (skill_base / name).exists() for name in skill_names
-    )
+    skill_ok = all_skills and skill_base and all((skill_base / name).exists() for name in skill_names)
 
     if mcp_ok and skill_ok:
         return (True, True, f"{target.label}: MCP and all skills installed.")
