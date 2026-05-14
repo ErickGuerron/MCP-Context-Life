@@ -102,16 +102,16 @@ Enhancements to add to existing telemetry panels (as compact info lines):
 
 ## Phase 9: Context Slice Enhancement (`mmcp/domain/context_slice.py` or extend existing)
 
-- [ ] 9.1 RED: Write failing test for `ContextSlice` carrying `cache_key`, `cache_hit`, `ttl_seconds`, `latency_ms`
-- [ ] 9.2 GREEN: Extend `ContextSlice` to include cache metadata fields
-- [ ] 9.3 GREEN: Add lazy module loading hook for heavy modules on cache miss
-- [ ] 9.4 REFACTOR: Add fallback to normal execution when cache entry corrupted
+- [x] 9.1 RED: Write failing test for `ContextSlice` carrying `cache_key`, `cache_hit`, `ttl_seconds`, `latency_ms`
+- [x] 9.2 GREEN: Extend `ContextSlice` to include cache metadata fields
+- [x] 9.3 GREEN: Add lazy module loading hook for heavy modules on cache miss
+- [x] 9.4 REFACTOR: Add fallback to normal execution when cache entry corrupted
 
 ## Phase 10: Integration + Wiring
 
-- [ ] 10.1 Wire `AutoInvokeCache` into auto-invoke execution path, guarded by `auto_invoke_cache.enabled`
-- [ ] 10.2 Wire `AutoInvokeMetrics` into cache hit/miss path, guarded by `usage_tracking.enabled`
-- [ ] 10.3 Wire `_check_multi_stack()` into `OrchestratorDetector.get_orchestrator_info()`, guarded by `multi_stack_detection.enabled`
-- [ ] 10.4 Wire `SessionPersistence` into session lifecycle, guarded by `cross_session_state.enabled`
-- [ ] 10.5 Wire dashboard panel into existing TUI render layout, guarded by `governance_dashboard.enabled`
-- [ ] 10.6 Wire `auto_invoke_tracker` into auto-invoke completion, guarded by `telemetry.integration.auto_invoke`
+- [x] 10.1 Wire `AutoInvokeCache` into auto-invoke execution path, guarded by `auto_invoke_cache.enabled`
+- [x] 10.2 Wire `AutoInvokeMetrics` into cache hit/miss path, guarded by `usage_tracking.enabled`
+- [x] 10.3 Wire `_check_multi_stack()` into `OrchestratorDetector.get_orchestrator_info()`, guarded by `multi_stack_detection.enabled`
+- [x] 10.4 Wire `SessionPersistence` into session lifecycle, guarded by `cross_session_state.enabled`
+- [x] 10.5 Wire dashboard panel into existing TUI render layout, guarded by `governance_dashboard.enabled`
+- [x] 10.6 Wire `auto_invoke_tracker` into auto-invoke completion, guarded by `telemetry.integration.auto_invoke`
