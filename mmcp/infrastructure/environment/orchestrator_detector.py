@@ -15,10 +15,17 @@ from __future__ import annotations
 
 import dataclasses
 import os
+import platform
 from collections import defaultdict, deque
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Optional
+
+# psutil is optional - multi-stack detection degrades gracefully
+try:
+    import psutil
+except ImportError:
+    psutil = None  # type: ignore[assignment]
 
 _cached_result: Optional[OrchestratorInfo] = None
 
@@ -238,6 +245,84 @@ def _check_workspace_artifacts(cwd: Optional[str] = None) -> Optional[Orchestrat
                 )
 
     return None
+
+
+def _check_multi_stack() -> Optional[OrchestratorInfo]:
+    """
+    Phase 5: Detect multiple AI IDE stacks running simultaneously.
+
+    Checks for:
+      - Cursor (CURSOR_DIR env var)
+      - WindSurf (WINDURF_DATA_DIR env var)
+      - Codex (codex-cli process via psutil)
+
+    Requires 2+ signals before confirming multi-stack presence.
+    Single-IDE signals are treated as normal orchestrator detection
+    (handled by _check_env_vars or _check_workspace_artifacts).
+
+    Respects multi_stack_detection.enabled config flag.
+
+    Returns:
+        OrchestratorInfo if multi-stack (2+) detected, None otherwise.
+    """
+    try:
+        from mmcp.infrastructure.environment.config import get_config
+
+        cfg = get_config()
+        if not cfg.multi_stack_detection_enabled:
+            return None
+    except Exception:
+        # Config not available - skip multi-stack detection
+        return None
+
+    signals: list[tuple[str, str]] = []
+
+    # Check Cursor
+    cursor_dir = os.environ.get("CURSOR_DIR")
+    if cursor_dir and Path(cursor_dir).resolve().exists():
+        signals.append(("cursor", cursor_dir))
+
+    # Check WindSurf
+    windsurf_dir = os.environ.get("WINDURF_DATA_DIR")
+    if windsurf_dir and Path(windsurf_dir).resolve().exists():
+        signals.append(("windsurf", windsurf_dir))
+
+    # Check Codex via psutil process enumeration
+    try:
+        import psutil
+
+        is_windows = platform.system() == "Windows"
+        codex_name = "codex-cli.exe" if is_windows else "codex-cli"
+
+        for proc in psutil.process_iter(["name"]):
+            try:
+                if proc.info["name"] == codex_name:
+                    signals.append(("codex", f"pid:{proc.pid}"))
+                    break
+            except (psutil.NoSuchProcess, psutil.AccessDenied):
+                continue
+    except ImportError:
+        pass  # psutil not available - skip Codex detection
+
+    # Require 2+ signals for multi-stack confirmation
+    if len(signals) < 2:
+        return None
+
+    # Build orchestrator name from detected stacks
+    stack_names = sorted(set(s[0] for s in signals))
+    orchestrator_name = "-".join(stack_names)
+    detection_method = f"multi-stack:{','.join(stack_names)}"
+
+    return OrchestratorInfo(
+        is_detected=True,
+        orchestrator_name=orchestrator_name,
+        detection_method=detection_method,
+        features=OrchestratorFeatures(
+            has_skills=True,
+            detected_tools=[s[0] for s in signals],
+        ),
+        advisor_mode=True,
+    )
 
 
 def _check_tool_pattern(tracker: _ToolPatternTracker) -> tuple[Optional[OrchestratorInfo], Optional[str]]:

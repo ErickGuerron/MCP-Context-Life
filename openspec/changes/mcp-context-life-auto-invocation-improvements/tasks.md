@@ -59,11 +59,11 @@ Chain strategy: pending
 
 ## Phase 5: Multi-Stack Detection (`mmcp/infrastructure/environment/orchestrator_detector.py`)
 
-- [ ] 5.1 RED: Write failing tests for `_check_multi_stack()` detecting Cursor (`CURSOR_DIR`), Windsurf (`WINDURF_DATA_DIR`), Codex (`codex-cli` process)
-- [ ] 5.2 GREEN: Add `_check_multi_stack()` method checking env vars and `psutil` process enumeration
-- [ ] 5.3 REFACTOR: Handle platform differences (Windows `codex-cli.exe` vs Unix `codex-cli`)
-- [ ] 5.4 Add multi-signal validation: require multiple signals before confirming host
-- [ ] 5.5 RED: Write failing test for `multi_stack_detection.enabled: false` bypass
+- [x] 5.1 RED: Write failing tests for `_check_multi_stack()` detecting Cursor (`CURSOR_DIR`), Windsurf (`WINDURF_DATA_DIR`), Codex (`codex-cli` process)
+- [x] 5.2 GREEN: Add `_check_multi_stack()` method checking env vars and `psutil` process enumeration
+- [x] 5.3 REFACTOR: Handle platform differences (Windows `codex-cli.exe` vs Unix `codex-cli`)
+- [x] 5.4 Add multi-signal validation: require multiple signals before confirming host
+- [x] 5.5 RED: Write failing test for `multi_stack_detection.enabled: false` bypass
 
 ## Phase 6: Cross-Session Persistence (`mmcp/infrastructure/persistence/session_persistence.py`)
 

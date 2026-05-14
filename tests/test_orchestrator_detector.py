@@ -503,3 +503,94 @@ class TestCheckToolPattern:
         # Should return some orchestrator based on advice ratio
         assert result is not None
         assert result.is_detected is True
+
+
+class TestMultiStackDetection:
+    """Test Phase 5 Multi-Stack Detection - detect multiple AI IDEs running simultaneously."""
+
+    def test_check_multi_stack_requires_multiple_signals(self):
+        """Single signal (only CURSOR_DIR) should return None - requires 2+ signals."""
+        with tempfile.TemporaryDirectory() as tmp:
+            with patch.dict(os.environ, {"CURSOR_DIR": tmp}, clear=False):
+                from mmcp.infrastructure.environment.orchestrator_detector import _check_multi_stack
+
+                result = _check_multi_stack()
+
+        # Spec 5.4: require multiple signals before confirming host
+        assert result is None
+
+    def test_check_multi_stack_detects_cursor_and_windsurf(self):
+        """CURSOR_DIR + WINDURF_DATA_DIR (2 signals) should detect multi-stack."""
+        with tempfile.TemporaryDirectory() as tmp:
+            env = {"CURSOR_DIR": tmp, "WINDURF_DATA_DIR": tmp}
+            with patch.dict(os.environ, env, clear=False):
+                from mmcp.infrastructure.environment import config as config_module
+                from mmcp.infrastructure.environment.orchestrator_detector import _check_multi_stack
+
+                mock_config = config_module.CLConfig()
+                mock_config.multi_stack_detection_enabled = True
+                with patch.object(config_module, "get_config", return_value=mock_config):
+                    result = _check_multi_stack()
+
+        assert result is not None
+        assert result.is_detected is True
+        assert result.orchestrator_name in ("cursor-windsurf", "windsurf-cursor")
+
+    def test_check_multi_stack_detects_codex_alone(self):
+        """codex-cli process alone should return None - requires 2+ signals."""
+        from unittest.mock import MagicMock
+
+        mock_process = MagicMock()
+        mock_process.pid = 1234
+        mock_process.info = {"name": "codex-cli.exe"}
+        with patch("mmcp.infrastructure.environment.orchestrator_detector.psutil.process_iter") as mock_iter:
+            mock_iter.return_value = [mock_process]
+            from mmcp.infrastructure.environment.orchestrator_detector import _check_multi_stack
+
+            result = _check_multi_stack()
+
+        # Codex alone = single signal → None per spec 5.4
+        assert result is None
+
+    def test_check_multi_stack_with_all_three_signals(self):
+        """CURSOR_DIR + WINDURF_DATA_DIR + codex-cli should return multi-stack."""
+        with tempfile.TemporaryDirectory() as tmp:
+            env = {"CURSOR_DIR": tmp, "WINDURF_DATA_DIR": tmp}
+            with patch.dict(os.environ, env, clear=False):
+                from mmcp.infrastructure.environment import config as config_module
+                from mmcp.infrastructure.environment.orchestrator_detector import _check_multi_stack
+                from unittest.mock import MagicMock
+
+                mock_config = config_module.CLConfig()
+                mock_config.multi_stack_detection_enabled = True
+                mock_process = MagicMock()
+                mock_process.pid = 1234
+                mock_process.info = {"name": "codex-cli.exe"}
+                with patch.object(config_module, "get_config", return_value=mock_config):
+                    with patch("mmcp.infrastructure.environment.orchestrator_detector.psutil.process_iter") as mock_iter:
+                        mock_iter.return_value = [mock_process]
+                        result = _check_multi_stack()
+
+        assert result is not None
+        assert result.is_detected is True
+        # Should include codex in the multi-stack name
+        assert "codex" in result.orchestrator_name
+        assert "cursor" in result.orchestrator_name
+        assert "windsurf" in result.orchestrator_name
+
+    def test_multi_stack_detection_disabled_bypasses(self):
+        """When multi_stack_detection.enabled=False, _check_multi_stack should return None."""
+        with tempfile.TemporaryDirectory() as tmp:
+            env = {"CURSOR_DIR": tmp, "WINDURF_DATA_DIR": tmp}
+            with patch.dict(os.environ, env, clear=False):
+                from mmcp.infrastructure.environment import config as config_module
+                from mmcp.infrastructure.environment.orchestrator_detector import _check_multi_stack
+
+                # Mock the multi_stack_detection config to be disabled
+                mock_config = config_module.CLConfig()
+                mock_config.multi_stack_detection_enabled = False
+
+                with patch.object(config_module, "get_config", return_value=mock_config):
+                    result = _check_multi_stack()
+
+        assert result is None

@@ -2,12 +2,12 @@
 
 ## Review Workload Forecast
 
-| Field | Value |
-|-------|-------|
-| Estimated changed lines | ~700–900 |
-| 400-line budget risk | High |
-| Chained PRs recommended | Yes |
-| Suggested split | PR 1 (Foundation) → PR 2 (Core) → PR 3 (Integration) |
+| Field                   | Value                                                |
+| ----------------------- | ---------------------------------------------------- |
+| Estimated changed lines | ~700–900                                             |
+| 400-line budget risk    | High                                                 |
+| Chained PRs recommended | Yes                                                  |
+| Suggested split         | PR 1 (Foundation) → PR 2 (Core) → PR 3 (Integration) |
 
 Decision needed before apply: Yes
 Chained PRs recommended: Yes
@@ -16,11 +16,11 @@ Chain strategy: pending
 
 ### Suggested Work Units
 
-| Unit | Goal | PR | Notes |
-|------|------|----|-------|
-| 1 | Stack Detection + Session ID Resolver | PR 1 | Base infrastructure; tests included |
-| 2 | Auto-Invoke + Sleep Tools | PR 2 | Core MCP tools; depends on PR 1 |
-| 3 | Governance Skill + Advisor + Persistence | PR 3 | Skill, sub-agent, and filesystem adapter; depends on PR 2 |
+| Unit | Goal                                     | PR   | Notes                                                     |
+| ---- | ---------------------------------------- | ---- | --------------------------------------------------------- |
+| 1    | Stack Detection + Session ID Resolver    | PR 1 | Base infrastructure; tests included                       |
+| 2    | Auto-Invoke + Sleep Tools                | PR 2 | Core MCP tools; depends on PR 1                           |
+| 3    | Governance Skill + Advisor + Persistence | PR 3 | Skill, sub-agent, and filesystem adapter; depends on PR 2 |
 
 ## Phase 1: Stack Detection + Session ID Resolver
 
@@ -84,7 +84,7 @@ Chain strategy: pending
 - [x] 3.3.1 Create `mmcp/infrastructure/persistence/context_state_store.py` — `ContextStateStore` protocol (load/persist/delete), factory returning FS or Engram adapter
 - [x] 3.3.2 Create `mmcp/infrastructure/persistence/file_system_adapter.py` — persists to `~/.config/context-life/sessions/{id}/state.json`, handles missing directory
 - [x] 3.3.3 Add unit tests: tmp_path fixture, read/write cycle, missing dir creation
-- [ ] 3.3.4 Add RED test for Engram adapter fallback (multi-agent), then GREEN implement
+- [x] 3.3.4 Add RED test for Engram adapter fallback (multi-agent), then GREEN implement
 
 ### 3.4: Phase Guardian (Optional for v1)
 
