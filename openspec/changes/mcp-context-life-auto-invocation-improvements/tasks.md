@@ -67,12 +67,12 @@ Chain strategy: pending
 
 ## Phase 6: Cross-Session Persistence (`mmcp/infrastructure/persistence/session_persistence.py`)
 
-- [ ] 6.1 RED: Write failing test for `SessionPersistence.save_state()` / `load_state()` with atomic writes
-- [ ] 6.2 GREEN: Implement append-only journal table + state table in `session.db`, atomic writes via SQLite transaction
-- [ ] 6.3 GREEN: Add `journal_replay()` on startup to reconstruct state
-- [ ] 6.4 REFACTOR: Add corrupted state archive + fresh start fallback
-- [ ] 6.5 Add workspace fingerprint persistence (base prefix hash, RAG hash)
-- [ ] 6.6 RED: Write failing test for `cross_session_state.enabled: false` memory-only mode
+- [x] 6.1 RED: Write failing test for `SessionPersistence.save_state()` / `load_state()` with atomic writes
+- [x] 6.2 GREEN: Implement append-only journal table + state table in `session.db`, atomic writes via SQLite transaction
+- [x] 6.3 GREEN: Add `journal_replay()` on startup to reconstruct state
+- [x] 6.4 REFACTOR: Add corrupted state archive + fresh start fallback
+- [x] 6.5 Add workspace fingerprint persistence (base prefix hash, RAG hash)
+- [x] 6.6 RED: Write failing test for `cross_session_state.enabled: false` memory-only mode
 
 ## Phase 7: Governance Dashboard (`mmcp/presentation/cli/dashboard.py`)
 
