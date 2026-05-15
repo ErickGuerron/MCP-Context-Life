@@ -10,7 +10,7 @@ context: |
 strict_tdd: true
 
 testing:
-  detected: 2026-04-30
+  detected: 2026-05-15
   strict_tdd: true
   test_runner:
     framework: pytest

@@ -34,6 +34,10 @@ Context-Life is an **MCP server** that optimizes how LLMs use their context wind
 - **Orchestrator Detection** — Auto-detects Gentle AI, Engram, and MCP orchestrators
 - **Intelligent Context Optimization** — Classifies prompts as LIGHT / REQUIRED / CRITICAL to decide when optimization is actually needed
 - **HALT Governance** — Detects contradictions and halts before generating incompatible code
+- **Auto-Invoke Cache** — TTL-based caching with SHA-256 key derivation and concurrent request deduplication
+- **Cross-Session State** — SQLite journal for persistent state across sessions
+- **Governance Dashboard** — Real-time metrics (cache status, priority tier, staleness)
+- **Multi-Stack Detection** — Detects Cursor, Windsurf, and Codex environments
 
 ---
 
@@ -233,6 +237,8 @@ Edit `claude_desktop_config.json`:
 
 | Tool | Description |
 |------|-------------|
+| `autoinvoke_context` | Auto-invoke context optimization at prompt boundaries (zero-step wake for solo-agents) |
+| `sleep_context` | Persist session learnings at task end (solo-agent sleep behavior) |
 | `count_tokens_tool` | Count tokens for any text using tiktoken |
 | `count_messages_tokens_tool` | Count tokens for OpenAI-style message arrays |
 | `optimize_messages` | Trim message arrays using tail/head/smart strategies |
@@ -355,6 +361,28 @@ D4 evaluates every prompt and classifies it as LIGHT / REQUIRED / CRITICAL:
 The orchestrator receives both the legacy contract (`intent`, `keywords`, `advice`) and the D4 decision under `d4{}`, so existing workflows are preserved while gaining intelligent routing.
 
 > **[Context Optimization Logic](docs/context-optimization.md)** — Business rules, state definitions, confidence thresholds, HALT triggers, and token cost analysis.
+
+### Auto-Invoke Context Lifecycle *(v0.7.1)*
+
+Context-Life implements a **Zero-Step** context lifecycle — context optimization happens *before* any core agent task execution:
+
+**Solo-Agent (Windsurf, Codex, Claude Code):**
+- **Wake (step zero)**: `autoinvoke_context` is called as the absolute first token before the agent thinks
+- **Sleep (task end)**: `sleep_context` persists learnings to the server
+- Governance is enforced via the `context-life` skill file
+
+**Orchestrator (Gentle AI / custom with `delegate()`):**
+- The orchestrator routes every prompt to `context-life-advisor` first
+- Advisor calls `autoinvoke_context` and returns a `ContextPack` with ground truth
+- Governance is handled by the orchestrator's routing rules
+
+**Bypass:** Set `DISABLE_AUTOINVOKE=1` in the environment to disable all auto-invocation behavior.
+
+| Environment | Governance | Wake | Sleep |
+|------------|------------|------|-------|
+| solo-agent | Skill file | `autoinvoke_context` as step zero | `sleep_context` at task end |
+| gentle-ai / orchestrator with `delegate()` | Orchestrator routing | `context-life-advisor` sub-agent | Handled via orchestrator phases |
+| solo-agent (`DISABLE_AUTOINVOKE=1`) | None | No-op | No-op |
 
 ### Orchestration Advice *(vNext)*
 Context-Life now exposes a first explicit orchestration contract for upstream orchestrators:
