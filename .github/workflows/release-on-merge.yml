@@ -1,0 +1,77 @@
+name: "Create Release on Merge to Main"
+
+on:
+  pull_request:
+    types: [closed]
+    branches: [main]
+
+permissions:
+  contents: write
+
+jobs:
+  create-release:
+    name: "Create GitHub Release"
+    runs-on: ubuntu-latest
+    if: github.event.pull_request.merged == true
+
+    steps:
+      - name: " Checkout"
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: " Detect if this PR introduces a version tag"
+        id: detect_tag
+        run: |
+          # Find the most recent version tag that was pushed as part of this PR
+          # Look for tags that are on main now but not on main before the PR
+          PR_BASE_BRANCH="${{ github.event.pull_request.base.ref }}"
+          echo "PR base: $PR_BASE_BRANCH"
+
+          # Get the version from pyproject.toml since version-sync already bumped it
+          VERSION=$(python -c "import re; print(re.search(r'^version\s*=\s*[\"']([^\"']+)[\"']', open('pyproject.toml').read(), re.MULTILINE).group(1))")
+          echo "VERSION=$VERSION" >> $GITHUB_OUTPUT
+          echo "TAG=v$VERSION" >> $GITHUB_OUTPUT
+
+      - name: " Check if tag exists locally"
+        id: tag_exists
+        run: |
+          TAG="${{ steps.detect_tag.outputs.TAG }}"
+          if git rev-parse "$TAG^{tag}" >/dev/null 2>&1; then
+            echo "TAG_EXISTS=true" >> $GITHUB_OUTPUT
+          else
+            echo "TAG_EXISTS=false" >> $GITHUB_OUTPUT
+          fi
+
+      - name: " Get tag annotation (release notes)"
+        if: steps.tag_exists.outputs.TAG_EXISTS == 'true'
+        id: tag_msg
+        run: |
+          TAG_MSG=$(python scripts/bump-version.py --tag-msg "${{ steps.detect_tag.outputs.TAG }}")
+          # Escape for GITHUB_OUTPUT (replace newlines with %0A)
+          TAG_MSG_ESCAPED=$(echo "$TAG_MSG" | python -c "import sys; print(sys.stdin.read().replace('%', '%25').replace('\n', '%0A'))")
+          echo "TAG_MSG=$TAG_MSG_ESCAPED" >> $GITHUB_OUTPUT
+
+      - name: " Create release (if tag exists)"
+        if: steps.tag_exists.outputs.TAG_EXISTS == 'true'
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ steps.detect_tag.outputs.TAG }}
+          name: "Context-Life ${{ steps.detect_tag.outputs.VERSION }}"
+          body: ${{ steps.tag_msg.outputs.TAG_MSG }}
+          generate_release_notes: false
+          draft: false
+          prerelease: false
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: " Info (no tag detected)"
+        if: steps.tag_exists.outputs.TAG_EXISTS != 'true'
+        run: |
+          echo "No version tag found for this merge. Skipping release creation."
+          echo "Tag '${{ steps.detect_tag.outputs.TAG }}' not found."
+          echo "Version from pyproject.toml: ${{ steps.detect_tag.outputs.VERSION }}"
+          echo ""
+          echo "To create a release: tag the commit after merging, e.g.:"
+          echo "  git tag -a v${{ steps.detect_tag.outputs.VERSION }} -m 'Release v${{ steps.detect_tag.outputs.VERSION }}'"
+          echo "  git push origin v${{ steps.detect_tag.outputs.VERSION }}"
