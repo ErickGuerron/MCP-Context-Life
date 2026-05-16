@@ -40,14 +40,8 @@ jobs:
             COMMIT_RANGE="HEAD~1..HEAD"
           fi
           
-          git log --no-merges --oneline $COMMIT_RANGE | while read -r line; do
-            # Skip merge commits (various formats)
-            if echo "$line" | grep -qE "^[a-f0-9]+ Merge "; then
-              continue
-            fi
-            if echo "$line" | grep -qE " [0-9a-f]+ Merge "; then
-              continue
-            fi
+          git rev-list --reverse --max-parents=1 $COMMIT_RANGE | while read -r commit; do
+            line="$(git show -s --format='%h %s' "$commit")"
             if ! echo "$line" | grep -qE "^[a-f0-9]+ (feat|fix|docs|style|refactor|perf|test|build|ci|chore|revert)(\(.+\))?: .+"; then
               echo "❌ Non-conventional commit: $line"
               echo "Expected format: type(scope): description"
