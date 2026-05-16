@@ -19,10 +19,12 @@ jobs:
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
+          fetch-tags: true
 
       - name: "Detect if this PR introduces a version tag"
         id: detect_tag
         run: |
+          git fetch --tags --force
           PR_BASE_BRANCH="${{ github.event.pull_request.base.ref }}"
           echo "PR base: $PR_BASE_BRANCH"
 
