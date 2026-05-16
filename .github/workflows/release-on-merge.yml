@@ -38,6 +38,7 @@ jobs:
             TAG="v$VERSION"
           fi
 
+          VERSION=$(python -c "import re; print(re.search(r'^version\s*=\s*([^\"']+)', open('pyproject.toml').read(), re.MULTILINE).group(1))")
           echo "VERSION=$VERSION" >> $GITHUB_OUTPUT
           echo "TAG=$TAG" >> $GITHUB_OUTPUT
 
