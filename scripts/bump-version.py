@@ -98,7 +98,7 @@ def update_scoop_manifest(version: str) -> None:
     )
     autoupdate_content = re.sub(
         r'https://github\.com/[^/]+/[^/]+/releases/download/v[^/]+/context_life-[^"/]+-py3-none-any\.whl',
-        'https://github.com/ErickGuerron/MCP-Context-Life/releases/download/v$version/context_life-$version-py3-none-any.whl',
+        "https://github.com/ErickGuerron/MCP-Context-Life/releases/download/v$version/context_life-$version-py3-none-any.whl",
         autoupdate_content,
     )
     content = static_content + autoupdate_marker + autoupdate_content
