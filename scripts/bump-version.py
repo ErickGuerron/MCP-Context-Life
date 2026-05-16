@@ -177,6 +177,7 @@ def check_versions() -> bool:
 
 def get_tag_annotation(tag: str) -> str:
     """Get annotation message from a git tag."""
+
     def read_tag_contents(ref: str) -> str:
         result = subprocess.run(
             [
