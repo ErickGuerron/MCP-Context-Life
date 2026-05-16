@@ -40,7 +40,7 @@ jobs:
             COMMIT_RANGE="HEAD~1..HEAD"
           fi
           
-          git log --oneline $COMMIT_RANGE | while read -r line; do
+          git log --no-merges --oneline $COMMIT_RANGE | while read -r line; do
             # Skip merge commits (various formats)
             if echo "$line" | grep -qE "^[a-f0-9]+ Merge "; then
               continue
