@@ -20,11 +20,9 @@ Single-source-of-truth: pyproject.toml is the ONLY file you edit manually.
 All other version references are derived from it.
 """
 
-from __future__ import annotations
-
 import re
-import sys
 import subprocess
+import sys
 from argparse import ArgumentParser
 from pathlib import Path
 
@@ -75,7 +73,7 @@ def update_scoop_manifest(version: str) -> None:
     """Update version in bucket/context-life.json (Scoop manifest)."""
     manifest = ROOT / "bucket" / "context-life.json"
     if not manifest.exists():
-        print(f"  [SKIP] bucket/context-life.json not found — skipping")
+        print("[SKIP] bucket/context-life.json not found — skipping")
         return
 
     content = manifest.read_text(encoding="utf-8")
@@ -89,8 +87,15 @@ def update_scoop_manifest(version: str) -> None:
     )
 
     # Update URLs (replace version in URL paths)
+    old_version = get_version_from_pyproject()
+
     def replace_url(m: re.Match) -> str:
-        return m.group(0).replace(f"download/v{get_version_from_pyproject()}", f"download/v{version}").replace(f"-{get_version_from_pyproject()}-", f"-{version}-")
+        url = m.group(0)
+        old_download = f"download/v{old_version}"
+        new_download = f"download/v{version}"
+        old_pkg = f"-{old_version}-"
+        new_pkg = f"-{version}-"
+        return url.replace(old_download, new_download).replace(old_pkg, new_pkg)
 
     content = re.sub(
         r'https://github\.com/[^/]+/[^/]+/releases/download/v[^/]+/[^"]+',
@@ -106,23 +111,23 @@ def update_readme(version: str) -> None:
     """Update version badge and example commands in README.md."""
     readme = ROOT / "README.md"
     if not readme.exists():
-        print(f"  [SKIP] README.md not found — skipping")
+        print("[SKIP] README.md not found — skipping")
         return
 
     content = readme.read_text(encoding="utf-8")
 
     # Update version badge
     content = re.sub(
-        r'img\.shields\.io/badge/version-[0-9]+\.[0-9]+\.[0-9]+-[a-z]+',
-        f'img.shields.io/badge/version-{version}-blue',
+        r"img\.shields\.io/badge/version-[0-9]+\.[0-9]+\.[0-9]+-[a-z]+",
+        f"img.shields.io/badge/version-{version}-blue",
         content,
         count=1,
     )
 
     # Update example commands (context-life upgrade --version vX.Y.Z)
     content = re.sub(
-        r'context-life upgrade --version v[0-9]+\.[0-9]+\.[0-9]+',
-        f'context-life upgrade --version v{version}',
+        r"context-life upgrade --version v[0-9]+\.[0-9]+\.[0-9]+",
+        f"context-life upgrade --version v{version}",
         content,
     )
 
@@ -136,8 +141,14 @@ def check_versions() -> bool:
     files = {
         "pyproject.toml": (ROOT / "pyproject.toml", r'version\s*=\s*["\']([^"\']+)["\']'),
         "mmcp/__init__.py": (ROOT / "mmcp" / "__init__.py", r'__version__\s*=\s*["\']([^"\']+)["\']'),
-        "bucket/context-life.json": (ROOT / "bucket" / "context-life.json", r'"version":\s*"([^"]+)"'),
-        "README.md badge": (ROOT / "README.md", r'badge/version-([0-9]+\.[0-9]+\.[0-9]+)-'),
+        "bucket/context-life.json": (
+            ROOT / "bucket" / "context-life.json",
+            r'"version":\s*"([^"]+)"',
+        ),
+        "README.md badge": (
+            ROOT / "README.md",
+            r"badge/version-([0-9]+\.[0-9]+\.[0-9]+)-",
+        ),
     }
 
     all_ok = True
@@ -168,7 +179,13 @@ def get_tag_annotation(tag: str) -> str:
     """Get annotation message from a git tag."""
     try:
         result = subprocess.run(
-            ["git", "tag", "--list", tag, "--format=%(contents:subject)%0a%(contents:body)"],
+            [
+                "git",
+                "tag",
+                "--list",
+                tag,
+                "--format=%(contents:subject)%0a%(contents:body)",
+            ],
             capture_output=True,
             text=True,
             cwd=ROOT,
@@ -239,7 +256,6 @@ def main() -> None:
 
     # Save tag message to file if requested
     if args.save_tag_msg:
-        # Get the current tag for this version (v prefix)
         tag = f"v{version}"
         msg = get_tag_annotation(tag)
         Path(args.save_tag_msg).write_text(msg, encoding="utf-8")
