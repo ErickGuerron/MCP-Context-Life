@@ -15,7 +15,7 @@ jobs:
   create-release:
     name: "Create GitHub Release"
     runs-on: ubuntu-latest
-    if: github.event.pull_request.merged == true
+    if: github.event_name == 'push' || github.event.pull_request.merged == true
 
     steps:
       - name: "Checkout"
@@ -42,17 +42,7 @@ jobs:
           else
             PR_BASE_BRANCH="${{ github.event.pull_request.base.ref }}"
             echo "PR base: $PR_BASE_BRANCH"
-            VERSION=$(python - <<'PY'
-from pathlib import Path
-import re
-
-content = Path('pyproject.toml').read_text(encoding='utf-8')
-match = re.search(r'^version\s*=\s*"([^"]+)"', content, re.MULTILINE)
-if not match:
-    raise SystemExit('ERROR: Could not find version in pyproject.toml')
-print(match.group(1))
-PY
-)
+            VERSION=$(python -c "from pathlib import Path; import re; content = Path('pyproject.toml').read_text(encoding='utf-8'); match = re.search(r'^version\\s*=\\s*\"([^\"]+)\"', content, re.MULTILINE); raise SystemExit('ERROR: Could not find version in pyproject.toml') if not match else print(match.group(1))")
             TAG="v$VERSION"
           fi
           echo "VERSION=$VERSION" >> $GITHUB_OUTPUT
