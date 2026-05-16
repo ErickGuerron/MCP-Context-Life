@@ -1,5 +1,5 @@
 {
-    "version": "0.8.0",
+    "version": "0.8.2",
     "description": "Context-Life (CL) — LLM context optimization MCP server with local RAG, trim history, token counting, and prompt caching.",
     "homepage": "https://github.com/ErickGuerron/MCP-Context-Life",
     "license": "MIT",
