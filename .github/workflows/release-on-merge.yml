@@ -28,7 +28,7 @@ jobs:
           PR_BASE_BRANCH="${{ github.event.pull_request.base.ref }}"
           echo "PR base: $PR_BASE_BRANCH"
 
-          VERSION=$(python -c "import re; print(re.search(r'^version\s*=\s*[\"']([^\"']+)[\"']', open('pyproject.toml').read(), re.MULTILINE).group(1))")
+          VERSION=$(python -c "import re; print(re.search(r'^version\s*=\s*([^\"']+)', open('pyproject.toml').read(), re.MULTILINE).group(1))")
           echo "VERSION=$VERSION" >> $GITHUB_OUTPUT
           echo "TAG=v$VERSION" >> $GITHUB_OUTPUT
 
