@@ -87,21 +87,21 @@ def update_scoop_manifest(version: str) -> None:
     )
 
     # Update URLs (replace version in URL paths)
-    old_version = get_version_from_pyproject()
-
-    def replace_url(m: re.Match) -> str:
-        url = m.group(0)
-        old_download = f"download/v{old_version}"
-        new_download = f"download/v{version}"
-        old_pkg = f"-{old_version}-"
-        new_pkg = f"-{version}-"
-        return url.replace(old_download, new_download).replace(old_pkg, new_pkg)
-
-    content = re.sub(
-        r'https://github\.com/[^/]+/[^/]+/releases/download/v[^/]+/[^"]+',
-        replace_url,
-        content,
+    static_content, autoupdate_marker, autoupdate_content = content.partition('"autoupdate": {')
+    static_content = re.sub(
+        r'https://github\.com/[^/]+/[^/]+/releases/download/v[^/]+/context_life-[^"/]+-py3-none-any\.whl',
+        lambda _: (
+            f"https://github.com/ErickGuerron/MCP-Context-Life/releases/download/v{version}/"
+            f"context_life-{version}-py3-none-any.whl"
+        ),
+        static_content,
     )
+    autoupdate_content = re.sub(
+        r'https://github\.com/[^/]+/[^/]+/releases/download/v[^/]+/context_life-[^"/]+-py3-none-any\.whl',
+        "https://github.com/ErickGuerron/MCP-Context-Life/releases/download/v$version/context_life-$version-py3-none-any.whl",
+        autoupdate_content,
+    )
+    content = static_content + autoupdate_marker + autoupdate_content
 
     manifest.write_text(content, encoding="utf-8")
     print(f"  [OK] bucket/context-life.json -> {version}")
@@ -170,6 +170,32 @@ def check_versions() -> bool:
         status = "[OK]" if found == expected else "[MISMATCH]"
         print(f"  {status} {name}: {found}")
         if found != expected:
+            all_ok = False
+
+    manifest = ROOT / "bucket" / "context-life.json"
+    if manifest.exists():
+        content = manifest.read_text(encoding="utf-8")
+        static_content, _, autoupdate_content = content.partition('"autoupdate": {')
+        wheel_urls = re.findall(
+            r"https://github\.com/[^/]+/[^/]+/releases/download/v([^/]+)/context_life-([^/]+)-py3-none-any\.whl",
+            static_content,
+        )
+        if not wheel_urls:
+            print("  [MISMATCH] bucket/context-life.json wheel URL: pattern not found")
+            all_ok = False
+        else:
+            for download_version, package_version in wheel_urls:
+                status = "[OK]" if download_version == expected and package_version == expected else "[MISMATCH]"
+                print(f"  {status} bucket/context-life.json wheel URL: v{download_version} / {package_version}")
+                if download_version != expected or package_version != expected:
+                    all_ok = False
+
+        autoupdate_urls = re.findall(
+            r"https://github\.com/[^/]+/[^/]+/releases/download/v\$version/context_life-\$version-py3-none-any\.whl",
+            autoupdate_content,
+        )
+        if len(autoupdate_urls) != 2:
+            print("  [MISMATCH] bucket/context-life.json autoupdate URLs must keep $version placeholders")
             all_ok = False
 
     return all_ok
