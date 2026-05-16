@@ -1,0 +1,1 @@
+"""Presentation MCP adapter."""

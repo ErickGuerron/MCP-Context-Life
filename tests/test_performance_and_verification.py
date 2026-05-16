@@ -5,9 +5,9 @@ from pathlib import Path
 
 import pytest
 
-from mmcp.rag_engine import RAGEngine
-from mmcp.token_counter import count_messages_tokens, count_tokens
-from mmcp.trim_history import trim_messages
+from mmcp.infrastructure.context.trim_history import trim_messages
+from mmcp.infrastructure.knowledge.rag_engine import RAGEngine
+from mmcp.infrastructure.tokens.token_counter import count_messages_tokens, count_tokens
 
 # --- 1. VERIFICACIÓN DE EXACTITUD (TRUTHFULNESS) ---
 

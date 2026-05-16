@@ -1,0 +1,14 @@
+change: mcp-context-life-auto-invocation
+status: spec
+mode: hybrid
+strict_tdd: true
+specs:
+  - domain: context-auto-invocation
+    type: new
+    requirements: 3
+    scenarios: 9
+  - domain: context-life-governance
+    type: new
+    requirements: 4
+    scenarios: 8
+created: 2026-05-10

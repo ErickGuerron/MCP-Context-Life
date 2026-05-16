@@ -1,0 +1,835 @@
+from __future__ import annotations
+
+import json
+import logging
+import os
+import shutil
+import sys
+import tempfile
+from dataclasses import dataclass
+from pathlib import Path
+from typing import Any, Callable
+
+logger = logging.getLogger(__name__)
+
+
+@dataclass(frozen=True, slots=True)
+class InstallTarget:
+    key: str
+    label: str
+    path_resolver: Callable[[Path], Path]
+    overlay: dict[str, Any]
+
+
+@dataclass(frozen=True, slots=True)
+class InstallResult:
+    key: str
+    label: str
+    path: Path
+    changed: bool
+
+
+@dataclass(frozen=True, slots=True)
+class ConnectedProvider:
+    """A provider the user has connected via auth.json (OAuth/token)."""
+
+    id: str  # e.g. "openai", "anthropic", "google"
+    name: str  # display name if available
+
+
+@dataclass(frozen=True, slots=True)
+class LocalModel:
+    """A locally configured model (e.g. Ollama running on machine)."""
+
+    provider: str  # e.g. "ollama"
+    model_id: str
+    full_name: str
+
+
+@dataclass(frozen=True, slots=True)
+class ProviderModel:
+    """A model configured for a specific OpenCode provider."""
+
+    provider: str
+    model_id: str
+    display_name: str
+    full_name: str
+    price_label: str = ""
+
+
+@dataclass(frozen=True, slots=True)
+class ZenModel:
+    """A model available via OpenCode Zen."""
+
+    model_id: str  # e.g. "opencode/qwen3:8b"
+    display_name: str  # e.g. "Qwen 3.6 Plus"
+    is_free: bool
+    description: str  # e.g. "Free for limited time"
+
+
+# OpenCode Zen curated models with pricing info
+ZEN_MODELS: list[ZenModel] = [
+    ZenModel(
+        model_id="opencode/qwen3:8b", display_name="Qwen 3.6 Plus", is_free=False, description="General purpose coder"
+    ),
+    ZenModel(model_id="opencode/qwen3:4b", display_name="Qwen 3.4", is_free=False, description="Compact coder model"),
+    ZenModel(
+        model_id="opencode/big-pickle", display_name="Big Pickle", is_free=True, description="Free - limited time"
+    ),
+    ZenModel(
+        model_id="opencode/minimax-m2.7",
+        display_name="MiniMax M2.7",
+        is_free=False,
+        description="High capability coder",
+    ),
+    ZenModel(
+        model_id="opencode/minimax-m2.5", display_name="MiniMax M2.5", is_free=False, description="Mid-range coder"
+    ),
+    ZenModel(
+        model_id="opencode/minimax-m2.5-free", display_name="MiniMax M2.5 Free", is_free=True, description="Free tier"
+    ),
+    ZenModel(model_id="opencode/glm-5", display_name="GLM 5", is_free=False, description="GLM latest"),
+    ZenModel(model_id="opencode/kimi-k2.6", display_name="Kimi K2.6", is_free=False, description="Kimi latest"),
+    ZenModel(
+        model_id="opencode/kimi-k2.5", display_name="Kimi K2.5", is_free=False, description="Kimi previous version"
+    ),
+    ZenModel(
+        model_id="opencode/ling-2.6-flash-free",
+        display_name="Ling 2.6 Flash Free",
+        is_free=True,
+        description="Free input/output/cached",
+    ),
+    ZenModel(
+        model_id="opencode/hy3-preview-free", display_name="Hy3 Preview Free", is_free=True, description="Free preview"
+    ),
+    ZenModel(
+        model_id="opencode/nemotron-3-super-free",
+        display_name="Nemotron 3 Super Free",
+        is_free=True,
+        description="Free input/output/cached",
+    ),
+]
+
+
+def _get_auth_providers(home: Path) -> list[ConnectedProvider]:
+    """Read auth.json and return connected providers."""
+    auth_path = home / ".local" / "share" / "opencode" / "auth.json"
+    if not auth_path.exists():
+        return []
+
+    try:
+        auth_data = json.loads(auth_path.read_text(encoding="utf-8"))
+        providers = []
+        for provider_id in auth_data.keys():
+            providers.append(ConnectedProvider(id=provider_id, name=provider_id.title()))
+        return providers
+    except (json.JSONDecodeError, OSError):
+        return []
+
+
+def _get_local_models(home: Path) -> list[LocalModel]:
+    """Read opencode.json provider config for local models (e.g. ollama)."""
+    opencode_path = home / ".config" / "opencode" / "opencode.json"
+    config = _read_json_object(opencode_path)
+
+    local_models: list[LocalModel] = []
+    provider_config = config.get("provider", {})
+
+    if isinstance(provider_config, dict):
+        for provider_name, provider_data in provider_config.items():
+            if not isinstance(provider_data, dict):
+                continue
+            # Only include providers that have locally hosted models
+            # (identified by having a base_url pointing to localhost)
+            options = provider_data.get("options", {})
+            # Handle both base_url and baseURL (opencode uses camelCase)
+            base_url = ""
+            if isinstance(options, dict):
+                base_url = options.get("base_url", options.get("baseURL", ""))
+            is_local = "localhost" in base_url or "127.0.0.1" in base_url
+
+            if is_local:
+                provider_models = provider_data.get("models", {})
+                if isinstance(provider_models, dict):
+                    for model_id in provider_models.keys():
+                        local_models.append(
+                            LocalModel(
+                                provider=provider_name,
+                                model_id=model_id,
+                                full_name=f"{provider_name}/{model_id}",
+                            )
+                        )
+
+    return local_models
+
+
+def _get_provider_models(home: Path, provider_name: str) -> list[ProviderModel]:
+    """Read OpenCode's cached model inventory for a specific provider.
+
+    Gentle AI treats `~/.cache/opencode/models.json` as the source of truth for
+    available providers/models. If the cache is missing, the TUI should degrade
+    gracefully instead of trying to hit OpenCode live during menu construction.
+    """
+
+    def format_cost(cost: Any) -> str:
+        if not isinstance(cost, dict):
+            return ""
+        input_cost = cost.get("input")
+        output_cost = cost.get("output")
+        cache_read = cost.get("cache_read")
+        cache_write = cost.get("cache_write")
+
+        parts: list[str] = []
+        if isinstance(input_cost, (int, float)):
+            parts.append(f"in {input_cost:g}")
+        if isinstance(output_cost, (int, float)):
+            parts.append(f"out {output_cost:g}")
+        if isinstance(cache_read, (int, float)) and isinstance(cache_write, (int, float)):
+            parts.append(f"cache {cache_read:g}/{cache_write:g}")
+        return " • ".join(parts)
+
+    cache_path = home / ".cache" / "opencode" / "models.json"
+    if not cache_path.exists():
+        return []
+
+    data = _read_json_object(cache_path)
+    provider_data = data.get(provider_name)
+    if not isinstance(provider_data, dict):
+        return []
+
+    models_data = provider_data.get("models", {})
+    if not isinstance(models_data, dict):
+        return []
+
+    provider_label = str(provider_data.get("name", provider_name) or provider_name)
+    models: list[ProviderModel] = []
+    for model_id, model_data in models_data.items():
+        if not isinstance(model_data, dict):
+            continue
+        display_name = str(model_data.get("name", model_id) or model_id)
+        price_label = format_cost(model_data.get("cost"))
+        models.append(
+            ProviderModel(
+                provider=provider_name,
+                model_id=model_id,
+                display_name=display_name,
+                full_name=f"{provider_name}/{model_id}",
+                price_label=price_label,
+            )
+        )
+
+    # Keep provider label available for future UI tweaks via model metadata.
+    _ = provider_label
+    return models
+
+
+def _is_zen_connected(home: Path) -> bool:
+    """Check if OpenCode Zen is connected via auth.json."""
+    auth_path = home / ".local" / "share" / "opencode" / "auth.json"
+    if not auth_path.exists():
+        return False
+    try:
+        auth_data = json.loads(auth_path.read_text(encoding="utf-8"))
+        return "opencode-zen" in auth_data or "zen" in auth_data
+    except (json.JSONDecodeError, OSError):
+        return False
+
+
+@dataclass
+class StackDetection:
+    has_gentle_ai: bool
+    has_engram: bool
+
+
+def _opencode_path(home: Path) -> Path:
+    return home / ".config" / "opencode" / "opencode.json"
+
+
+def _antigravity_path(home: Path) -> Path:
+    return home / ".gemini" / "antigravity" / "mcp_config.json"
+
+
+def _antigravity_overlay() -> dict[str, Any]:
+    return {
+        "mcpServers": {
+            "context-life": {
+                "command": sys.executable,
+                "args": ["-m", "mmcp"],
+            }
+        }
+    }
+
+
+def _vscode_path(home: Path) -> Path:
+    if os.name == "nt":
+        appdata = Path(os.environ.get("APPDATA", home / "AppData" / "Roaming"))
+        return appdata / "Code" / "User" / "mcp.json"
+
+    if sys_platform() == "darwin":
+        return home / "Library" / "Application Support" / "Code" / "User" / "mcp.json"
+
+    # On Linux, respect APPDATA if set (e.g. CI test environment)
+    appdata = os.environ.get("APPDATA")
+    if appdata:
+        return Path(appdata) / "Code" / "User" / "mcp.json"
+
+    # Otherwise use XDG_CONFIG_HOME or ~/.config
+    xdg = os.environ.get("XDG_CONFIG_HOME")
+    base = Path(xdg) if xdg else home / ".config"
+    return base / "Code" / "User" / "mcp.json"
+
+
+def sys_platform() -> str:
+    return os.uname().sysname.lower() if hasattr(os, "uname") else os.name
+
+
+TARGETS: tuple[InstallTarget, ...] = (
+    InstallTarget(
+        key="opencode",
+        label="OpenCode",
+        path_resolver=_opencode_path,
+        overlay={
+            "mcp": {
+                "context-life": {
+                    "type": "local",
+                    "command": ["context-life"],
+                    "enabled": True,
+                }
+            }
+        },
+    ),
+    InstallTarget(
+        key="antigravity",
+        label="Antigravity",
+        path_resolver=_antigravity_path,
+        overlay=_antigravity_overlay(),
+    ),
+    InstallTarget(
+        key="vscode",
+        label="Visual Studio Code",
+        path_resolver=_vscode_path,
+        overlay={
+            "servers": {
+                "context-life": {
+                    "type": "stdio",
+                    "command": sys.executable,
+                    "args": ["-m", "mmcp"],
+                }
+            }
+        },
+    ),
+)
+
+
+def get_targets() -> tuple[InstallTarget, ...]:
+    return TARGETS
+
+
+def get_target(key: str) -> InstallTarget:
+    normalized = key.strip().lower()
+    for target in TARGETS:
+        if target.key == normalized:
+            return target
+    raise KeyError(f"Unknown installation target: {key}")
+
+
+def get_all_skill_source_dirs() -> list[Path]:
+    """Return paths to all bundled skill directories in installation/skills/.
+
+    Dynamically scans the installation/skills/ directory for subdirectories
+    containing SKILL.md. This replaces the hardcoded skill name list.
+
+    Each subdirectory of installation/skills/ that contains a SKILL.md is
+    considered a skill and will be installed to the target platform.
+
+    Returns a list of Path objects.
+    Raises FileNotFoundError if no skills are found.
+    """
+    try:
+        from importlib.resources import files
+
+        skills: list[Path] = []
+
+        # Dynamically find all skill directories under installation/skills/
+        installation_pkg = "mmcp.infrastructure.installation.skills"
+
+        # Dynamically scan for any skill directories containing SKILL.md
+        try:
+            base_path = files(installation_pkg)
+            for child in base_path.iterdir():
+                if child.is_dir():
+                    skill_file = child / "SKILL.md"
+                    if skill_file.exists():
+                        skills.append(skill_file.parent.resolve())
+        except Exception:
+            pass
+
+        if not skills:
+            raise FileNotFoundError(
+                "No bundled skills found in package.\n"
+                "Ensure [tool.setuptools.package-data] includes the skill directories.\n"
+                "Skills should be placed in mmcp/infrastructure/installation/<skill-name>/SKILL.md"
+            )
+        return skills
+    except FileNotFoundError:
+        raise
+    except Exception as exc:
+        raise FileNotFoundError(
+            f"Bundled skills not found in package.\n"
+            f"Error: {exc}\n\n"
+            "This may indicate the package was not built correctly.\n"
+            "Ensure [tool.setuptools.package-data] includes the skill directory."
+        )
+
+
+def copy_all_skills_to_opencode(home: Path) -> None:
+    """Copy all bundled skills to OpenCode skills directory."""
+    for source in get_all_skill_source_dirs():
+        skill_name = source.name
+        dest = home / ".config" / "opencode" / "skills" / skill_name
+        dest.parent.mkdir(parents=True, exist_ok=True)
+        if dest.exists():
+            logger.info("OpenCode skill already present at %s — overwriting.", dest)
+        shutil.copytree(source, dest, dirs_exist_ok=True)
+
+
+def copy_all_skills_to_antigravity(home: Path) -> None:
+    """Copy all bundled skills to Antigravity skills directory."""
+    for source in get_all_skill_source_dirs():
+        skill_name = source.name
+        dest = home / ".gemini" / "skills" / skill_name
+        dest.parent.mkdir(parents=True, exist_ok=True)
+        if dest.exists():
+            logger.info("Antigravity skill already present at %s — overwriting.", dest)
+        shutil.copytree(source, dest, dirs_exist_ok=True)
+
+
+def install_skill_for_target(target_key: str, home_dir: Path) -> None:
+    """Dispatch skill copy to the correct platform handler."""
+    if target_key == "opencode":
+        copy_all_skills_to_opencode(home_dir)
+    elif target_key == "antigravity":
+        copy_all_skills_to_antigravity(home_dir)
+    elif target_key == "vscode":
+        pass
+    else:
+        raise ValueError(f"Unknown installation target: {target_key}")
+
+
+def verify_install(target_key: str, home_dir: Path) -> tuple[bool, bool, str]:
+    """Check that installation succeeded for the given target."""
+    target = get_target(target_key)
+    config_path = target.path_resolver(home_dir)
+    mcp_ok = config_path.exists() and _read_json_object(config_path) != {}
+
+    if target_key == "vscode":
+        return (mcp_ok, True, "VS Code MCP configured (no skill system).")
+
+    skill_base = None
+    if target_key == "opencode":
+        skill_base = home_dir / ".config" / "opencode" / "skills"
+    elif target_key == "antigravity":
+        skill_base = home_dir / ".gemini" / "skills"
+
+    all_skills = get_all_skill_source_dirs()
+    skill_names = [s.name for s in all_skills]
+    skill_ok = all_skills and skill_base and all((skill_base / name).exists() for name in skill_names)
+
+    if mcp_ok and skill_ok:
+        return (True, True, f"{target.label}: MCP and all skills installed.")
+    elif mcp_ok and not skill_ok:
+        missing = [n for n in skill_names if not (skill_base / n).exists()]
+        return (True, False, f"{target.label}: MCP OK, skills missing: {missing}")
+    else:
+        return (False, False, f"{target.label}: MCP config missing.")
+
+
+def detect_stack(home: Path) -> StackDetection:
+    """Detect which stack components are available."""
+    opencode_path = home / ".config" / "opencode" / "opencode.json"
+    config = _read_json_object(opencode_path)
+
+    has_gentle_ai = False
+    agents = config.get("agent", {})
+    if isinstance(agents, dict):
+        has_gentle_ai = "gentle-orchestrator" in agents or "sdd-orchestrator" in agents
+
+    has_engram = False
+    mcp = config.get("mcp", {})
+    if isinstance(mcp, dict):
+        has_engram = any("engram" in k.lower() for k in mcp.keys())
+
+    return StackDetection(has_gentle_ai=has_gentle_ai, has_engram=has_engram)
+
+
+def _get_advisor_prompt_content(stack: StackDetection) -> str:
+    """Generate advisor prompt based on detected stack."""
+    base = """# Context-Life Advisor
+
+You are the `context-life-advisor` sub-agent. Your role is to intercept and optimize
+context before the orchestrator begins working on a task.
+
+## Workflow
+
+1. Receive a raw user request from the orchestrator
+2. Call `autoinvoke_context(stack_type="orchestrator")` using the MCP tool
+"""
+
+    if stack.has_engram:
+        base += """3. Check Engram for conflicting past decisions:
+   - Call: engram/mem_search with query about past decisions related to the request
+   - If contradiction found → elevate to CRITICAL immediately (skip step 4)
+4. If no contradiction, parse the autoinvoke response
+
+"""
+    else:
+        base += """3. Parse the autoinvoke_context response — extract the context pack:
+   - `status`: awakened | delegated
+   - `active_session_id`: session ID for awareness
+   - `level`: REQUIRED | LIGHT | CRITICAL
+   - `recommendations`: what to do next
+   - `session_state`: current state
+
+"""
+
+    base += """4. Based on `level`, determine context budget:
+   - LIGHT = small budget (min tokens to validate paths)
+   - REQUIRED = medium (search for missing pieces)
+   - CRITICAL = tiny (halt only, no code generation)
+
+5. Return a Markdown report to the orchestrator:
+
+## Context Analysis
+
+**State**: [level from autoinvoke response]
+**Session ID**: [active_session_id]
+**Recommendations**: [recommendations from response]
+
+"""
+
+    if stack.has_engram:
+        base += """## D4 History Awareness (Engram)
+If Engram check found a contradiction, format CRITICAL output with:
+- The conflicting past decision
+- The new request
+- Question: "¿Deseas actualizar la decisión anterior o mantenerla?"
+
+"""
+
+    base += """## If CRITICAL (HALT)
+
+"""
+
+    if stack.has_gentle_ai and stack.has_engram:
+        base += """⚠️ **HALT REQUIRED** — Conflict with past decisions or detected contradiction
+- **Session ID**: [active_session_id]
+- **Required Decision**: Show the halt details to user and wait for response
+- **Strict TDD Question**: ¿Deseas actualizar la suite de tests de integración para este cambio mayor?
+
+"""
+    else:
+        base += """⚠️ **HALT REQUIRED**
+- **Session ID**: [active_session_id]
+- **Required Decision**: Show the halt details to user and wait for response
+
+"""
+
+    base += """## Important
+
+- Do NOT write code — only analyze and report
+- Do NOT delegate to other agents
+- Use `autoinvoke_context` MCP tool (not bash/python calls)
+- Return the Markdown report to the orchestrator
+"""
+
+    return base
+
+
+def install_context_life_advisor(home: Path, model: str | None = None) -> dict[str, Any]:
+    """Install context-life-advisor sub-agent with stack-aware configuration.
+
+    Args:
+        home: User's home directory (Path.home())
+        model: Model to use for the advisor (e.g. "ollama/qwen3:8b").
+               If None, must be selected interactively via the TUI.
+
+    Returns the updated config dict (in memory) so caller can use it.
+    Does NOT write to disk — caller is responsible for writing.
+    """
+    stack = detect_stack(home)
+
+    # 1. Create advisor prompt file
+    prompts_dir = home / ".config" / "opencode" / "prompts"
+    prompts_dir.mkdir(parents=True, exist_ok=True)
+    advisor_prompt_path = prompts_dir / "context-life-advisor.md"
+
+    content = _get_advisor_prompt_content(stack)
+    advisor_prompt_path.write_text(content, encoding="utf-8")
+
+    # 2. Add agent entry to opencode.json
+    opencode_path = home / ".config" / "opencode" / "opencode.json"
+    config = _read_json_object(opencode_path)
+
+    # Ensure agent dict exists
+    if "agent" not in config:
+        config["agent"] = {}
+
+    # Add context-life-advisor agent entry (idempotent — won't overwrite existing)
+    if "context-life-advisor" not in config["agent"]:
+        config["agent"]["context-life-advisor"] = {
+            "description": "Intercepts raw user requests to resolve project context and optimize context budgets",
+            "hidden": True,
+            "mode": "subagent",
+            "model": model or "ollama/qwen3:8b",
+            "prompt": str(advisor_prompt_path),
+            "tools": {"bash": True, "read": True, "write": True},
+        }
+
+    # 3. Update sdd-orchestrator.md ONLY if gentle-ai detected
+    if stack.has_gentle_ai:
+        orchestrator_path = prompts_dir / "sdd" / "sdd-orchestrator.md"
+        if orchestrator_path.exists():
+            # Read current content
+            content = orchestrator_path.read_text(encoding="utf-8")
+
+            # Check if delegation to context-life-advisor already exists
+            if "context-life-advisor" not in content:
+                # Add delegation before the first SDD workflow section
+                insertion = """
+## Context-Life Advisor Integration [Auto-Installed]
+
+When a user request arrives, delegate to `context-life-advisor` FIRST to validate context:
+- If CRITICAL: HALT and ask user for clarification
+- If REQUIRED: Gather missing context before proceeding
+- If LIGHT: Proceed with the context provided
+
+To delegate:
+```
+task description="Analyze user request context" agent="context-life-advisor" prompt="[user's raw request]"
+```
+
+"""
+                # Insert after the "You are a COORDINATOR" line and before Delegation Rules
+                if "You are a COORDINATOR" in content:
+                    parts = content.split("You are a COORDINATOR", 1)
+                    content = parts[0] + "You are a COORDINATOR" + insertion + parts[1]
+                    orchestrator_path.write_text(content, encoding="utf-8")
+
+    return config
+
+
+def update_context_life_advisor_model(home: Path, model: str) -> dict[str, Any]:
+    """Update the configured model for context-life-advisor.
+
+    If the advisor is not installed yet, this falls back to the install flow so
+    the agent entry exists before the model is changed.
+    """
+    opencode_path = home / ".config" / "opencode" / "opencode.json"
+    config = _read_json_object(opencode_path)
+
+    if "agent" not in config or not isinstance(config["agent"], dict):
+        return install_context_life_advisor(home, model=model)
+
+    agent = config["agent"]
+    if "context-life-advisor" not in agent or not isinstance(agent["context-life-advisor"], dict):
+        return install_context_life_advisor(home, model=model)
+
+    agent["context-life-advisor"]["model"] = model
+    return config
+
+
+def get_context_life_advisor_model(home: Path) -> str | None:
+    """Read the currently configured context-life-advisor model from opencode.json."""
+    opencode_path = home / ".config" / "opencode" / "opencode.json"
+    config = _read_json_object(opencode_path)
+    agent = config.get("agent")
+    if not isinstance(agent, dict):
+        return None
+    advisor = agent.get("context-life-advisor")
+    if not isinstance(advisor, dict):
+        return None
+    model = advisor.get("model")
+    return str(model) if isinstance(model, str) and model.strip() else None
+
+
+def write_advisor_config_to_opencode(home: Path, config: dict[str, Any]) -> None:
+    """Write the advisor agent config into opencode.json via atomic write."""
+    opencode_path = home / ".config" / "opencode" / "opencode.json"
+    _write_json_atomic(opencode_path, config)
+
+
+def install_context_life(target_key: str, home_dir: str | Path | None = None) -> InstallResult:
+    home = Path(home_dir) if home_dir is not None else Path.home()
+    target = get_target(target_key)
+    path = target.path_resolver(home)
+    base = _read_json_object(path)
+    merged = _deep_merge(base, target.overlay)
+
+    # Always try to copy skill if platform supports it, even when MCP config unchanged
+    try:
+        install_skill_for_target(target_key, home)
+    except Exception as exc:
+        logger.warning("Skill copy failed for %s: %s", target_key, exc)
+
+    # Install context-life-advisor sub-agent for opencode target
+    if target_key == "opencode":
+        advisor_config = install_context_life_advisor(home)
+        # Merge advisor agent entry into merged config so it gets written
+        if "agent" not in merged:
+            merged["agent"] = {}
+        for agent_name, agent_config in advisor_config.get("agent", {}).items():
+            if agent_name not in merged["agent"]:
+                merged["agent"][agent_name] = agent_config
+
+    if base == merged:
+        return InstallResult(key=target.key, label=target.label, path=path, changed=False)
+
+    _write_json_atomic(path, merged)
+    return InstallResult(key=target.key, label=target.label, path=path, changed=True)
+
+
+def _read_json_object(path: Path) -> dict[str, Any]:
+    if not path.exists():
+        return {}
+
+    raw = path.read_text(encoding="utf-8")
+    if not raw.strip():
+        return {}
+
+    for candidate in (raw, _strip_trailing_commas(_strip_json_comments(raw))):
+        try:
+            loaded = json.loads(candidate)
+        except json.JSONDecodeError:
+            continue
+        if isinstance(loaded, dict):
+            return loaded
+
+    return {}
+
+
+def _strip_json_comments(raw: str) -> str:
+    out: list[str] = []
+    in_string = False
+    escaped = False
+    in_line_comment = False
+    in_block_comment = False
+
+    i = 0
+    while i < len(raw):
+        ch = raw[i]
+
+        if in_line_comment:
+            if ch == "\n":
+                in_line_comment = False
+                out.append(ch)
+            i += 1
+            continue
+
+        if in_block_comment:
+            if ch == "*" and i + 1 < len(raw) and raw[i + 1] == "/":
+                in_block_comment = False
+                i += 2
+                continue
+            i += 1
+            continue
+
+        if in_string:
+            out.append(ch)
+            if escaped:
+                escaped = False
+            elif ch == "\\":
+                escaped = True
+            elif ch == '"':
+                in_string = False
+            i += 1
+            continue
+
+        if ch == '"':
+            in_string = True
+            out.append(ch)
+            i += 1
+            continue
+
+        if ch == "/" and i + 1 < len(raw):
+            next_ch = raw[i + 1]
+            if next_ch == "/":
+                in_line_comment = True
+                i += 2
+                continue
+            if next_ch == "*":
+                in_block_comment = True
+                i += 2
+                continue
+
+        out.append(ch)
+        i += 1
+
+    return "".join(out)
+
+
+def _strip_trailing_commas(raw: str) -> str:
+    out: list[str] = []
+    in_string = False
+    escaped = False
+    i = 0
+    while i < len(raw):
+        ch = raw[i]
+
+        if in_string:
+            out.append(ch)
+            if escaped:
+                escaped = False
+            elif ch == "\\":
+                escaped = True
+            elif ch == '"':
+                in_string = False
+            i += 1
+            continue
+
+        if ch == '"':
+            in_string = True
+            out.append(ch)
+            i += 1
+            continue
+
+        if ch == ",":
+            j = i + 1
+            while j < len(raw) and raw[j] in " \t\n\r":
+                j += 1
+            if j < len(raw) and raw[j] in "}]":
+                i += 1
+                continue
+
+        out.append(ch)
+        i += 1
+
+    return "".join(out)
+
+
+def _deep_merge(base: dict[str, Any], overlay: dict[str, Any]) -> dict[str, Any]:
+    """Deep merge with special handling for agents array."""
+    result = dict(base)
+    for key, value in overlay.items():
+        if key == "agent" and isinstance(value, dict) and isinstance(result.get(key), dict):
+            # Agent-specific merge: append new agents, replacing existing by name
+            for agent_name, agent_config in value.items():
+                if agent_name in result[key]:
+                    # Don't overwrite existing agents
+                    continue
+                result[key][agent_name] = agent_config
+        elif isinstance(value, dict) and isinstance(result.get(key), dict):
+            result[key] = _deep_merge(result[key], value)
+        else:
+            result[key] = value
+    return result
+
+
+def _write_json_atomic(path: Path, payload: dict[str, Any]) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    text = json.dumps(payload, indent=2, ensure_ascii=False) + "\n"
+    with tempfile.NamedTemporaryFile(
+        "w", encoding="utf-8", delete=False, dir=path.parent, prefix=path.name, suffix=".tmp"
+    ) as tmp:
+        tmp.write(text)
+        temp_path = Path(tmp.name)
+    temp_path.replace(path)

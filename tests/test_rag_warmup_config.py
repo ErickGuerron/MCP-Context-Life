@@ -1,7 +1,7 @@
 import os
 from pathlib import Path
 
-from mmcp.config import load_config, save_config
+from mmcp.infrastructure.environment.config import load_config, save_config
 
 
 def test_load_config_reads_rag_warmup_mode(tmp_path: Path):

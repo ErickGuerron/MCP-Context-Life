@@ -3,7 +3,7 @@ Tests to ensure the CacheStore logic successfully saves to and restores from
 the SQLite SessionStore.
 """
 
-from mmcp.cache_manager import CacheStore
+from mmcp.infrastructure.persistence.cache_manager import CacheStore
 
 
 def test_cache_persistence(isolated_data_dir):

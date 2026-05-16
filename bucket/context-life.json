@@ -1,0 +1,34 @@
+{
+    "version": "0.8.0",
+    "description": "Context-Life (CL) — LLM context optimization MCP server with local RAG, trim history, token counting, and prompt caching.",
+    "homepage": "https://github.com/ErickGuerron/MCP-Context-Life",
+    "license": "MIT",
+    "url": "https://github.com/ErickGuerron/MCP-Context-Life/releases/download/v0.8.0/context_life-0.8.0-py3-none-any.whl",
+    "hash": "0000000000000000000000000000000000000000000000000000000000000000",
+    "architecture": {
+        "amd64": {
+            "url": "https://github.com/ErickGuerron/MCP-Context-Life/releases/download/v0.8.0/context_life-0.8.0-py3-none-any.whl",
+            "hash": "0000000000000000000000000000000000000000000000000000000000000000"
+        },
+        "arm64": {
+            "url": "https://github.com/ErickGuerron/MCP-Context-Life/releases/download/v0.8.0/context_life-0.8.0-py3-none-any.whl",
+            "hash": "0000000000000000000000000000000000000000000000000000000000000000"
+        }
+    },
+    "bin": [
+        "context-life"
+    ],
+    "checkver": {
+        "github": "https://github.com/ErickGuerron/MCP-Context-Life"
+    },
+    "autoupdate": {
+        "architecture": {
+            "amd64": {
+                "url": "https://github.com/ErickGuerron/MCP-Context-Life/releases/download/v$version/context_life-$version-py3-none-any.whl"
+            },
+            "arm64": {
+                "url": "https://github.com/ErickGuerron/MCP-Context-Life/releases/download/v$version/context_life-$version-py3-none-any.whl"
+            }
+        }
+    }
+}

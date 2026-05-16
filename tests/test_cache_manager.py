@@ -1,5 +1,5 @@
-from mmcp.cache_manager import CacheLoop
-from mmcp.config import get_config
+from mmcp.infrastructure.environment.config import get_config
+from mmcp.infrastructure.persistence.cache_manager import CacheLoop
 
 
 def test_cache_loop_throttles_full_prefix_cache_when_rag_thrash(isolated_data_dir):

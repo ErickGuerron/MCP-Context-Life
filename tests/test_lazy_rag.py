@@ -24,10 +24,10 @@ def test_rag_engine_instant_construction():
         start = time.perf_counter()
 
         # Patch the heavy imports to avoid actual model loading
-        with patch("mmcp.rag_engine.lancedb") as mock_lancedb:
+        with patch("mmcp.infrastructure.knowledge.rag_engine.lancedb") as mock_lancedb:
             mock_lancedb.connect.return_value = MagicMock()
 
-            from mmcp.rag_engine import RAGEngine
+            from mmcp.infrastructure.knowledge.rag_engine import RAGEngine
 
             engine = RAGEngine(db_path=tmp_dir, table_name="test_lazy")
 
@@ -44,13 +44,13 @@ def test_rag_engine_instant_construction():
 def test_stats_without_model():
     """stats() should work without loading the embedding model."""
     with tempfile.TemporaryDirectory() as tmp_dir:
-        with patch("mmcp.rag_engine.lancedb") as mock_lancedb:
+        with patch("mmcp.infrastructure.knowledge.rag_engine.lancedb") as mock_lancedb:
             mock_db = MagicMock()
             # Simulate no existing table
             mock_db.open_table.side_effect = Exception("Table not found")
             mock_lancedb.connect.return_value = mock_db
 
-            from mmcp.rag_engine import RAGEngine
+            from mmcp.infrastructure.knowledge.rag_engine import RAGEngine
 
             engine = RAGEngine(db_path=tmp_dir, table_name="test_stats")
 
@@ -64,11 +64,11 @@ def test_stats_without_model():
 def test_clear_without_model():
     """clear() should work without loading the embedding model."""
     with tempfile.TemporaryDirectory() as tmp_dir:
-        with patch("mmcp.rag_engine.lancedb") as mock_lancedb:
+        with patch("mmcp.infrastructure.knowledge.rag_engine.lancedb") as mock_lancedb:
             mock_db = MagicMock()
             mock_lancedb.connect.return_value = mock_db
 
-            from mmcp.rag_engine import RAGEngine
+            from mmcp.infrastructure.knowledge.rag_engine import RAGEngine
 
             engine = RAGEngine(db_path=tmp_dir, table_name="test_clear")
 
@@ -89,10 +89,10 @@ def test_index_directory_walks_filesystem_once(tmp_path, monkeypatch):
     (docs_dir / "skip.txt").write_text("ignore me")
     (nested_dir / "keep.md").write_text("# hello")
 
-    with patch("mmcp.rag_engine.lancedb") as mock_lancedb:
+    with patch("mmcp.infrastructure.knowledge.rag_engine.lancedb") as mock_lancedb:
         mock_lancedb.connect.return_value = MagicMock()
 
-        import mmcp.rag_engine as rag_module
+        import mmcp.infrastructure.knowledge.rag_engine as rag_module
 
         engine = rag_module.RAGEngine(db_path=str(tmp_path / "db"), table_name="test_walk")
 
@@ -122,10 +122,10 @@ def test_index_directory_walks_filesystem_once(tmp_path, monkeypatch):
 
 def test_load_existing_hashes_uses_projected_arrow_scan(tmp_path):
     """_load_existing_hashes() should scan only file_hash via Arrow projection."""
-    with patch("mmcp.rag_engine.lancedb") as mock_lancedb:
+    with patch("mmcp.infrastructure.knowledge.rag_engine.lancedb") as mock_lancedb:
         mock_lancedb.connect.return_value = MagicMock()
 
-        import mmcp.rag_engine as rag_module
+        import mmcp.infrastructure.knowledge.rag_engine as rag_module
 
         engine = rag_module.RAGEngine(db_path=str(tmp_path / "db"), table_name="test_hashes")
 
@@ -152,10 +152,10 @@ def test_load_existing_hashes_uses_projected_arrow_scan(tmp_path):
 def test_rag_engine_resolves_default_db_path_at_runtime(monkeypatch, tmp_path):
     expected_path = tmp_path / "fake-home" / ".mmcp" / "lancedb"
 
-    with patch("mmcp.rag_engine.lancedb") as mock_lancedb:
+    with patch("mmcp.infrastructure.knowledge.rag_engine.lancedb") as mock_lancedb:
         mock_lancedb.connect.return_value = MagicMock()
 
-        import mmcp.rag_engine as rag_module
+        import mmcp.infrastructure.knowledge.rag_engine as rag_module
 
         monkeypatch.setattr(
             rag_module.os.path,
@@ -178,7 +178,7 @@ def test_rag_full_lifecycle():
     integration test — skip in CI with: pytest -m "not slow"
     """
     with tempfile.TemporaryDirectory() as tmp_dir:
-        from mmcp.rag_engine import RAGEngine
+        from mmcp.infrastructure.knowledge.rag_engine import RAGEngine
 
         # Phase 1: Construction is instant
         t0 = time.perf_counter()

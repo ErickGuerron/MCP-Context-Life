@@ -1,6 +1,6 @@
 [project]
 name = "context-life"
-version = "0.7.1"
+version = "0.8.0"
 description = "Context-Life (CL) — LLM context optimization MCP server with local RAG, trim history, token counting, and prompt caching."
 readme = "README.md"
 requires-python = ">=3.10"
@@ -26,6 +26,7 @@ dependencies = [
     "sentence-transformers>=2.2.0",
     "pyarrow>=14.0.0",
     "rich>=13.0.0",
+    "psutil>=5.9.0",
 ]
 
 [project.urls]
@@ -65,12 +66,18 @@ build-backend = "setuptools.build_meta"
 [tool.setuptools.packages.find]
 include = ["mmcp*"]
 
+[tool.setuptools.package-data]
+"mmcp.infrastructure.installation.skills" = ["**/*.md"]
+
 [tool.ruff]
 line-length = 120
 target-version = "py310"
 
 [tool.ruff.lint]
 select = ["E", "F", "I", "W"]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/*" = ["E501"]
 
 [tool.pytest.ini_options]
 markers = [

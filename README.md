@@ -10,7 +10,7 @@
 </p>
 
 <p align="center">
-  <a href="https://github.com/ErickGuerron/MCP-Context-Life/releases"><img src="https://img.shields.io/badge/version-0.7.1-blue?style=flat-square" alt="Version" /></a>
+  <a href="https://github.com/ErickGuerron/MCP-Context-Life/releases"><img src="https://img.shields.io/badge/version-0.8.0-blue?style=flat-square" alt="Version" /></a>
   <a href="https://www.python.org/downloads/"><img src="https://img.shields.io/badge/python-%3E%3D3.10-brightgreen?style=flat-square" alt="Python" /></a>
   <a href="LICENSE.md"><img src="https://img.shields.io/badge/license-MIT-green?style=flat-square" alt="License" /></a>
   <a href="https://modelcontextprotocol.io"><img src="https://img.shields.io/badge/protocol-MCP-purple?style=flat-square" alt="MCP" /></a>
@@ -22,22 +22,52 @@
 
 ---
 
-## ✨ What is Context-Life?
+## What is Context-Life?
 
 Context-Life is an **MCP server** that optimizes how LLMs use their context window. Think of **Contexty** (our mascot) as a little helper that sits between your AI client and the model, making sure every token counts.
 
-- 🔢 **Token Counting** — Exact counts using tiktoken with LRU caching
-- ✂️ **Smart Trimming** — Intelligent message array optimization that never drops system instructions
-- 🔍 **Local RAG** — Semantic search over your files using LanceDB + multilingual embeddings
-- 💾 **Prompt Caching** — Two-level prefix segmentation for maximum cache reuse
-- 🏥 **Context Health** — Real-time health score (0-100) with actionable recommendations
-- 🤖 **Orchestrator Detection** — Auto-detects Gentle AI, Engram, and MCP orchestrators
+- **Token Counting** — Exact counts using tiktoken with LRU caching
+- **Smart Trimming** — Intelligent message array optimization that never drops system instructions
+- **Local RAG** — Semantic search over your files using LanceDB + multilingual embeddings
+- **Prompt Caching** — Two-level prefix segmentation for maximum cache reuse
+- **Context Health** — Real-time health score (0-100) with actionable recommendations
+- **Orchestrator Detection** — Auto-detects Gentle AI, Engram, and MCP orchestrators
+- **Intelligent Context Optimization** — Classifies prompts as LIGHT / REQUIRED / CRITICAL to decide when optimization is actually needed
+- **HALT Governance** — Detects contradictions and halts before generating incompatible code
+- **Auto-Invoke Cache** — TTL-based caching with SHA-256 key derivation and concurrent request deduplication
+- **Cross-Session State** — SQLite journal for persistent state across sessions
+- **Governance Dashboard** — Real-time metrics (cache status, priority tier, staleness)
+- **Multi-Stack Detection** — Detects Cursor, Windsurf, and Codex environments
 
 ---
 
-## 🚀 Install
+## Install
 
-### Using uv (Fastest & Recommended)
+### Using Scoop (Windows — Recommended)
+
+Scoop is the recommended installation method for Windows. It handles updates automatically and keeps everything under user control.
+
+```bash
+scoop bucket add context-life https://github.com/ErickGuerron/MCP-Context-Life
+scoop install context-life
+```
+
+To update:
+```bash
+scoop update context-life
+```
+
+**Don't have Scoop?** Install it first (PowerShell):
+```powershell
+Set-ExecutionPolicy -ExecutionPolicy RemoteSigned -Scope CurrentUser
+irm get.scoop.sh | iex
+```
+
+For full scoop documentation, visit [scoop.sh](https://scoop.sh).
+
+---
+
+### Using uv (Fastest)
 
 ```bash
 uv tool install "git+https://github.com/ErickGuerron/MCP-Context-Life.git"
@@ -100,7 +130,7 @@ docker run --rm context-life doctor
 
 ---
 
-## ⌨️ CLI Commands
+## CLI Commands
 
 ```bash
 context-life                           # Start MCP server (stdio)
@@ -113,7 +143,7 @@ context-life warmup set startup        # Persist warmup mode: lazy|startup|manua
 context-life warmup interactive        # Interactive selector for warmup mode + prewarm
 context-life prewarm                   # Explicitly warm the RAG model now
 context-life upgrade                   # Upgrade to latest GitHub release
-context-life upgrade --version v0.7.1  # Install specific version
+context-life upgrade --version v0.8.0  # Install specific version
 context-life upgrade --dry-run         # Check without installing
 context-life version                   # Show version
 context-life help                      # Show help
@@ -121,7 +151,7 @@ context-life help                      # Show help
 
 ---
 
-## 🔧 Setup with MCP Clients
+## Setup with MCP Clients
 
 ### OpenCode
 
@@ -137,6 +167,36 @@ Add to `~/.config/opencode/opencode.json`:
     }
   }
 }
+```
+
+To make the client run Context-Life automatically on every turn, add a first-step policy in your agent/system prompt that calls `preflight_request` before planning or answering.
+
+```text
+Before every user turn, call the Context-Life MCP prompt `preflight_request` with the raw user request, then follow the returned `applied_process`.
+```
+
+If you want to bake it into OpenCode, add the same rule to the primary agent prompt:
+
+```text
+Always call `preflight_request` before planning the response to any user message. If the result says `noop`, answer normally. If it recommends another step, follow `applied_process` exactly.
+```
+
+### Install from the TUI
+
+Open `context-life tui`, go to **Config → Install Context-Life**, and choose one of:
+
+- **OpenCode**
+- **Antigravity**
+- **Visual Studio Code**
+
+Each option adds only the `context-life` MCP entry to that tool’s config.
+
+For automatic preflight, the client must be configured to call `preflight_request` first; the server cannot intercept chat invisibly on its own.
+
+Suggested Antigravity instruction:
+
+```text
+Before answering any user message, call the Context-Life MCP prompt `preflight_request` with the raw prompt. Use the returned `applied_process` to decide whether to optimize, search context, or continue normally.
 ```
 
 ### Claude Desktop
@@ -171,12 +231,14 @@ Edit `claude_desktop_config.json`:
 
 ---
 
-## 🧰 Features
+## Features
 
 ### Tools
 
 | Tool | Description |
 |------|-------------|
+| `autoinvoke_context` | Auto-invoke context optimization at prompt boundaries (zero-step wake for solo-agents) |
+| `sleep_context` | Persist session learnings at task end (solo-agent sleep behavior) |
 | `count_tokens_tool` | Count tokens for any text using tiktoken |
 | `count_messages_tokens_tool` | Count tokens for OpenAI-style message arrays |
 | `optimize_messages` | Trim message arrays using tail/head/smart strategies |
@@ -186,8 +248,8 @@ Edit `claude_desktop_config.json`:
 | `rag_stats` | Knowledge base statistics |
 | `clear_knowledge` | Clear all indexed knowledge |
 | `reset_token_budget` | Reset token budget tracker |
-| `analyze_context_health_tool` | 🆕 Context health analysis with score, metrics & recommendations |
-| `get_orchestration_advice` | 🆕 Actionable next-step contract for Gentle AI / MCP orchestrators |
+| `analyze_context_health_tool` | Context health analysis with score, metrics & recommendations |
+| `get_orchestration_advice` | Actionable next-step contract for Gentle AI / MCP orchestrators |
 
 ### Resources
 
@@ -196,12 +258,12 @@ Edit `claude_desktop_config.json`:
 | `status://token_budget` | Current token budget + LRU cache stats |
 | `cache://status` | Prompt cache hit/miss performance |
 | `rag://stats` | RAG knowledge base info |
-| `status://orchestrator` | 🆕 Detected orchestrator & advisor mode status |
-| `status://orchestration` | 🆕 Static orchestration contract and recommended tool flow |
+| `status://orchestrator` | Detected orchestrator & advisor mode status |
+| `status://orchestration` | Static orchestration contract and recommended tool flow |
 
 ---
 
-## 🏗️ Architecture
+## Architecture
 
 ```
 ┌──────────────────────────────────────────────────┐
@@ -234,9 +296,18 @@ Edit `claude_desktop_config.json`:
 └───────────────────────────────────────────────────┘
 ```
 
+Composition now starts in `mmcp/presentation/mcp/server.py`, which wires MCP tools/resources to `mmcp/presentation/app_container.py`. The container owns the shared runtime objects and config-aware accessors, so the server can stay thin while preserving the public MCP surface.
+
+### Layer map
+
+- `mmcp/presentation/` — MCP + CLI entry adapters and composition root
+- `mmcp/application/` — vertical slices and ports
+- `mmcp/infrastructure/` — concrete adapters by responsibility (`environment/`, `persistence/`, `tokens/`, `knowledge/`, `context/`, `telemetry/`)
+- `mmcp/domain/` — reserved for pure rules if they are extracted later
+
 ---
 
-## 📖 How It Works
+## How It Works
 
 ### Token Counter
 Uses `tiktoken` for exact token counting. Supports `cl100k_base` (GPT-4, Claude), `o200k_base` (GPT-4o), and `p50k_base` (Codex). **v0.5.0:** LRU cache (1024 entries) eliminates redundant counts during trim iterations.
@@ -249,6 +320,9 @@ Three strategies with **strict budget guarantee**:
 
 ### RAG Engine
 Local vector search using **LanceDB** (serverless) + **paraphrase-multilingual-MiniLM-L12-v2** (multilingual embeddings). **v0.5.0:** Lazy model loading eliminates cold start latency — the embedding model loads only on first use.
+
+> [!WARNING]
+> If you're seeing ~30s delays when opening your AI client (OpenCode, Claude Desktop, etc.) for the first time after a cold start, it's the embedding model loading. Run `context-life warmup set startup` to pre-warm it at MCP boot, or `context-life prewarm` before opening your client.
 - Automatic deduplication by file hash
 - Token-budgeted retrieval with skip-and-continue packing
 - Per-source chunk limits (`max_chunks_per_source`)
@@ -276,6 +350,40 @@ Auto-detects when CL runs alongside AI orchestrators like Gentle AI or Engram:
 - **Workspace artifacts**: `.gemini/`, `.gga`, `.agent/`, `.agents/`
 - Enables "Advisor Mode" with proactive optimization hints
 
+> **[Orchestrator Integration Guide](docs/orchestrator-integration.md)** — Context flow, Gentle AI / SDD integration, and adapter configuration.
+
+### Intelligent Context Optimization *(v0.7.1)*
+D4 evaluates every prompt and classifies it as LIGHT / REQUIRED / CRITICAL:
+- **LIGHT** (confidence ≥ 0.80): Prompt is clear — continue without optimization
+- **REQUIRED** (confidence 0.55-0.79): Prompt needs restructuring or context — call `cache_context` only if needed
+- **CRITICAL** (any conflict): Contradiction detected — **HALT** and resolve before proceeding
+
+The orchestrator receives both the legacy contract (`intent`, `keywords`, `advice`) and the D4 decision under `d4{}`, so existing workflows are preserved while gaining intelligent routing.
+
+> **[Context Optimization Logic](docs/context-optimization.md)** — Business rules, state definitions, confidence thresholds, HALT triggers, and token cost analysis.
+
+### Auto-Invoke Context Lifecycle *(v0.7.1)*
+
+Context-Life implements a **Zero-Step** context lifecycle — context optimization happens *before* any core agent task execution:
+
+**Solo-Agent (Windsurf, Codex, Claude Code):**
+- **Wake (step zero)**: `autoinvoke_context` is called as the absolute first token before the agent thinks
+- **Sleep (task end)**: `sleep_context` persists learnings to the server
+- Governance is enforced via the `context-life` skill file
+
+**Orchestrator (Gentle AI / custom with `delegate()`):**
+- The orchestrator routes every prompt to `context-life-advisor` first
+- Advisor calls `autoinvoke_context` and returns a `ContextPack` with ground truth
+- Governance is handled by the orchestrator's routing rules
+
+**Bypass:** Set `DISABLE_AUTOINVOKE=1` in the environment to disable all auto-invocation behavior.
+
+| Environment | Governance | Wake | Sleep |
+|------------|------------|------|-------|
+| solo-agent | Skill file | `autoinvoke_context` as step zero | `sleep_context` at task end |
+| gentle-ai / orchestrator with `delegate()` | Orchestrator routing | `context-life-advisor` sub-agent | Handled via orchestrator phases |
+| solo-agent (`DISABLE_AUTOINVOKE=1`) | None | No-op | No-op |
+
 ### Orchestration Advice *(vNext)*
 Context-Life now exposes a first explicit orchestration contract for upstream orchestrators:
 - `get_orchestration_advice` combines health + detection into actionable next steps
@@ -284,7 +392,7 @@ Context-Life now exposes a first explicit orchestration contract for upstream or
 
 ---
 
-## ⚙️ Configuration
+## Configuration
 
 Context-Life uses a three-tier configuration system:
 
@@ -332,7 +440,7 @@ If you prefer not to memorize commands, run `context-life warmup interactive` or
 
 ---
 
-## 🧪 Development
+## Development
 
 ```bash
 # Run with HTTP transport for testing
@@ -356,18 +464,26 @@ pytest -m performance
 
 ---
 
-## 📋 Requirements
+## Documentation
+
+| Document | Description |
+|----------|-------------|
+| [Context Optimization Logic](docs/context-optimization.md) | Business rules and behavior of the intelligent prompt optimization system (LIGHT/REQUIRED/CRITICAL states, confidence scoring, HALT governance) |
+| [Orchestrator Integration Guide](docs/orchestrator-integration.md) | How Context-Life integrates with Gentle AI and other orchestrators, context flow, and adapter configuration |
+| [Installation Guide](docs/installation.md) | Complete installation instructions for all platforms (Scoop, uv, pipx, pip, Docker) |
+
+## Requirements
 
 - Python >= 3.10
 - ~500MB disk for sentence-transformers model (downloaded once on first use)
 - No GPU required — runs on CPU
 
-## 📄 License
+## License
 
 [MIT License](LICENSE.md)
 
 ---
 
 <p align="center">
-  <sub>Built with ❤️ by <a href="https://github.com/ErickGuerron">Erick Guerrón</a></sub>
+  <sub>Built by <a href="https://github.com/ErickGuerron">Erick Guerrón</a></sub>
 </p>
