@@ -1,6 +1,9 @@
 name: "Create Release on Merge to Main"
 
 on:
+  push:
+    tags:
+      - 'v*'
   pull_request:
     types: [closed]
     branches: [main]
@@ -33,9 +36,13 @@ jobs:
         id: detect_tag
         run: |
           git fetch --tags --force
-          PR_BASE_BRANCH="${{ github.event.pull_request.base.ref }}"
-          echo "PR base: $PR_BASE_BRANCH"
-          VERSION=$(python - <<'PY'
+          if [ "${{ github.event_name }}" = "push" ]; then
+            TAG="${GITHUB_REF#refs/tags/}"
+            VERSION="${TAG#v}"
+          else
+            PR_BASE_BRANCH="${{ github.event.pull_request.base.ref }}"
+            echo "PR base: $PR_BASE_BRANCH"
+            VERSION=$(python - <<'PY'
 from pathlib import Path
 import re
 
@@ -46,9 +53,8 @@ if not match:
 print(match.group(1))
 PY
 )
-          TAG="v$VERSION"
-
-          VERSION=$(python -c "import re; print(re.search(r'^version\s*=\s*([^\"']+)', open('pyproject.toml').read(), re.MULTILINE).group(1))")
+            TAG="v$VERSION"
+          fi
           echo "VERSION=$VERSION" >> $GITHUB_OUTPUT
           echo "TAG=$TAG" >> $GITHUB_OUTPUT
 
