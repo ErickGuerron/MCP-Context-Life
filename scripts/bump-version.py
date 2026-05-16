@@ -177,13 +177,13 @@ def check_versions() -> bool:
 
 def get_tag_annotation(tag: str) -> str:
     """Get annotation message from a git tag."""
-    try:
+    def read_tag_contents(ref: str) -> str:
         result = subprocess.run(
             [
                 "git",
                 "tag",
                 "--list",
-                tag,
+                ref,
                 "--format=%(contents:subject)%0a%(contents:body)",
             ],
             capture_output=True,
@@ -192,6 +192,25 @@ def get_tag_annotation(tag: str) -> str:
         )
         if result.returncode == 0 and result.stdout.strip():
             return result.stdout.strip()
+        return ""
+
+    try:
+        exact = read_tag_contents(tag)
+        if exact:
+            return exact
+
+        latest = subprocess.run(
+            ["git", "describe", "--tags", "--abbrev=0", "--match", "v*"],
+            capture_output=True,
+            text=True,
+            cwd=ROOT,
+        )
+        if latest.returncode == 0:
+            fallback_tag = latest.stdout.strip()
+            if fallback_tag and fallback_tag != tag:
+                fallback = read_tag_contents(fallback_tag)
+                if fallback:
+                    return fallback
     except Exception:
         pass
     return ""
