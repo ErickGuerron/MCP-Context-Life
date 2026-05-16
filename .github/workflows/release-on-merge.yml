@@ -1,9 +1,6 @@
 name: "Create Release on Merge to Main"
 
 on:
-  push:
-    tags:
-      - 'v*'
   pull_request:
     types: [closed]
     branches: [main]
@@ -24,19 +21,32 @@ jobs:
           fetch-depth: 0
           fetch-tags: true
 
+      - name: "Set up Python"
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: "Install build tooling"
+        run: python -m pip install --upgrade pip build
+
       - name: "Detect if this PR introduces a version tag"
         id: detect_tag
         run: |
           git fetch --tags --force
-          if [ "${{ github.event_name }}" = "push" ]; then
-            TAG="${GITHUB_REF#refs/tags/}"
-            VERSION="${TAG#v}"
-          else
-            PR_BASE_BRANCH="${{ github.event.pull_request.base.ref }}"
-            echo "PR base: $PR_BASE_BRANCH"
-            VERSION=$(python -c "import re; print(re.search(r'^version\s*=\s*[\"']([^\"']+)[\"']', open('pyproject.toml').read(), re.MULTILINE).group(1))")
-            TAG="v$VERSION"
-          fi
+          PR_BASE_BRANCH="${{ github.event.pull_request.base.ref }}"
+          echo "PR base: $PR_BASE_BRANCH"
+          VERSION=$(python - <<'PY'
+from pathlib import Path
+import re
+
+content = Path('pyproject.toml').read_text(encoding='utf-8')
+match = re.search(r'^version\s*=\s*"([^"]+)"', content, re.MULTILINE)
+if not match:
+    raise SystemExit('ERROR: Could not find version in pyproject.toml')
+print(match.group(1))
+PY
+)
+          TAG="v$VERSION"
 
           VERSION=$(python -c "import re; print(re.search(r'^version\s*=\s*([^\"']+)', open('pyproject.toml').read(), re.MULTILINE).group(1))")
           echo "VERSION=$VERSION" >> $GITHUB_OUTPUT
@@ -52,6 +62,10 @@ jobs:
             echo "TAG_EXISTS=false" >> $GITHUB_OUTPUT
           fi
 
+      - name: "Build wheel"
+        if: steps.tag_exists.outputs.TAG_EXISTS == 'true'
+        run: python -m build --wheel
+
       - name: "Get tag annotation (release notes)"
         if: steps.tag_exists.outputs.TAG_EXISTS == 'true'
         run: |
@@ -63,6 +77,7 @@ jobs:
         with:
           tag_name: ${{ steps.detect_tag.outputs.TAG }}
           name: "Context-Life ${{ steps.detect_tag.outputs.VERSION }}"
+          files: dist/*.whl
           body: |
             See tag annotation for release notes.
           generate_release_notes: false

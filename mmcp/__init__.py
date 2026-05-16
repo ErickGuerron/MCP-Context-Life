@@ -12,7 +12,7 @@ from __future__ import annotations
 import importlib
 import sys
 
-__version__ = "0.8.2"
+__version__ = "0.8.3"
 
 
 _LEGACY_MODULE_ALIASES = {
