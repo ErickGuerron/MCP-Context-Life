@@ -78,10 +78,11 @@ jobs:
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
+          # Force push to develop from the current detached HEAD state
           python scripts/update-scoop-hash.py "${{ steps.exe_hash.outputs.EXE_HASH }}" "${{ steps.detect_tag.outputs.VERSION }}"
           git add bucket/context-life.json
           git commit -m "chore(scoop): update exe hash for v${{ steps.detect_tag.outputs.VERSION }}"
-          git push origin HEAD:refs/heads/develop
+          git push origin HEAD:refs/heads/develop --force
 
       - name: "Get tag annotation (release notes)"
         if: steps.tag_exists.outputs.TAG_EXISTS == 'true'
