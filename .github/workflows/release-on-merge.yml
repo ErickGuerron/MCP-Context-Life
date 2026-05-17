@@ -103,14 +103,7 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: "Update release with tag notes"
-        if: steps.tag_exists.outputs.TAG_EXISTS == 'true'
-        run: |
-          RELEASE_ID=$(gh release view "${{ steps.detect_tag.outputs.TAG }}" --json id -q .id)
-          TAG_BODY=$(cat /tmp/tag-message.txt)
-          gh api PATCH /repos/${{ github.repository }}/releases/$RELEASE_ID -f body="$TAG_BODY"
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      # NOTE: Tag annotation body is already in the release via softprops/action-gh-release body field
 
       - name: "Info (no tag detected)"
         if: steps.tag_exists.outputs.TAG_EXISTS != 'true'
