@@ -15,7 +15,6 @@ from __future__ import annotations
 
 import dataclasses
 import os
-import platform
 from collections import defaultdict, deque
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -291,12 +290,11 @@ def _check_multi_stack() -> Optional[OrchestratorInfo]:
     try:
         import psutil
 
-        is_windows = platform.system() == "Windows"
-        codex_name = "codex-cli.exe" if is_windows else "codex-cli"
+        codex_names = {"codex-cli", "codex-cli.exe"}
 
         for proc in psutil.process_iter(["name"]):
             try:
-                if proc.info["name"] == codex_name:
+                if proc.info["name"] in codex_names:
                     signals.append(("codex", f"pid:{proc.pid}"))
                     break
             except (psutil.NoSuchProcess, psutil.AccessDenied):

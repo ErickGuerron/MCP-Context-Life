@@ -14,7 +14,7 @@ permissions:
 jobs:
   create-release:
     name: "Create GitHub Release"
-    runs-on: ubuntu-latest
+    runs-on: windows-latest
     if: github.event_name == 'push' || github.event.pull_request.merged == true
 
     steps:
@@ -34,61 +34,65 @@ jobs:
 
       - name: "Detect version tag"
         id: detect_tag
+        shell: powershell
         run: |
           git fetch --tags --force
-          if [ "${{ github.event_name }}" = "push" ]; then
-            TAG="${GITHUB_REF#refs/tags/}"
-            VERSION="${TAG#v}"
-          else
-            PR_BASE_BRANCH="${{ github.event.pull_request.base.ref }}"
-            echo "PR base: $PR_BASE_BRANCH"
-            VERSION=$(python scripts/get-version.py)
-            TAG="v$VERSION"
-          fi
-          echo "VERSION=$VERSION" >> $GITHUB_OUTPUT
-          echo "TAG=$TAG" >> $GITHUB_OUTPUT
+          if ("${{ github.event_name }}" -eq "push") {
+            $tag = $env:GITHUB_REF -replace 'refs/tags/', ''
+            $version = $tag -replace '^v', ''
+          } else {
+            $prBaseBranch = "${{ github.event.pull_request.base.ref }}"
+            echo "PR base: $prBaseBranch"
+            $version = python scripts/get-version.py
+            $tag = "v$version"
+          }
+          echo "VERSION=$version" | Out-File -FilePath $env:GITHUB_OUTPUT -Encoding utf8 -Append
+          echo "TAG=$tag" | Out-File -FilePath $env:GITHUB_OUTPUT -Encoding utf8 -Append
 
       - name: "Check if tag exists locally"
         id: tag_exists
+        shell: powershell
         run: |
-          TAG="${{ steps.detect_tag.outputs.TAG }}"
-          if git rev-parse "$TAG^{tag}" >/dev/null 2>&1; then
-            echo "TAG_EXISTS=true" >> $GITHUB_OUTPUT
-          else
-            echo "TAG_EXISTS=false" >> $GITHUB_OUTPUT
-          fi
+          $tag = "${{ steps.detect_tag.outputs.TAG }}"
+          if (git rev-parse "$tag^{tag}" 2>$null) {
+            echo "TAG_EXISTS=true" | Out-File -FilePath $env:GITHUB_OUTPUT -Encoding utf8 -Append
+          } else {
+            echo "TAG_EXISTS=false" | Out-File -FilePath $env:GITHUB_OUTPUT -Encoding utf8 -Append
+          }
 
       - name: "Build wheel and exe"
         if: steps.tag_exists.outputs.TAG_EXISTS == 'true'
+        shell: powershell
         run: |
           pip install pyinstaller
           python -m build --wheel
-          python -m PyInstaller --onefile --name context-life mmcp/__main__exe__.py --distpath dist --workpath build
+          python -m PyInstaller --onefile --name context-life mmcp/__main__.py --distpath dist --workpath build
+          if (-not (Test-Path dist/context-life.exe)) { throw "context-life.exe was not generated" }
           echo "=== dist/ contents ==="
-          ls -lh dist/
+          Get-ChildItem dist/ | Format-Table Name, Length, LastWriteTime
           echo "=== exe size ==="
-          stat dist/context-life.exe || ls -lh dist/context-life.exe
+          Get-Item dist/context-life.exe | Format-Table Name, Length
           echo "=== exe sha256 ==="
-          sha256sum dist/context-life.exe
+          (Get-FileHash dist/context-life.exe -Algorithm SHA256 | Select-Object -ExpandProperty Hash)
 
       - name: "Get exe hash"
         id: exe_hash
         if: steps.tag_exists.outputs.TAG_EXISTS == 'true'
+        shell: powershell
         run: |
           echo "=== SHA256 ==="
-          EXE_HASH=$(sha256sum dist/context-life.exe | cut -d' ' -f1)
-          echo "EXE_HASH=$EXE_HASH"
-          echo "EXE_HASH=$EXE_HASH" >> $GITHUB_OUTPUT
+          $exeHash = (Get-FileHash dist/context-life.exe -Algorithm SHA256 | Select-Object -ExpandProperty Hash)
+          echo "EXE_HASH=$exeHash"
+          echo "EXE_HASH=$exeHash" | Out-File -FilePath $env:GITHUB_OUTPUT -Encoding utf8 -Append
           echo "=== File info ==="
-          ls -lh dist/context-life.exe
-          file dist/context-life.exe || true
+          Get-Item dist/context-life.exe | Format-Table Name, Length, LastWriteTime
 
       - name: "Update Scoop bucket with real exe hash"
         if: steps.tag_exists.outputs.TAG_EXISTS == 'true'
+        shell: powershell
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
-          # Force push to develop from the current detached HEAD state
           python scripts/update-scoop-hash.py "${{ steps.exe_hash.outputs.EXE_HASH }}" "${{ steps.detect_tag.outputs.VERSION }}"
           git add bucket/context-life.json
           git commit -m "chore(scoop): update exe hash for v${{ steps.detect_tag.outputs.VERSION }}"
@@ -96,8 +100,9 @@ jobs:
 
       - name: "Get tag annotation (release notes)"
         if: steps.tag_exists.outputs.TAG_EXISTS == 'true'
+        shell: powershell
         run: |
-          python scripts/bump-version.py --tag-msg "${{ steps.detect_tag.outputs.TAG }}" > /tmp/tag-message.txt
+          python scripts/bump-version.py --tag-msg "${{ steps.detect_tag.outputs.TAG }}" | Out-File -FilePath $env:TEMP\tag-message.txt -Encoding utf8
 
       - name: "Create release (if tag exists)"
         if: steps.tag_exists.outputs.TAG_EXISTS == 'true'
@@ -108,8 +113,8 @@ jobs:
           files: |
             dist/context-life.exe
             dist/*.whl
-          body: |
-            See tag annotation for release notes.
+          fail_on_unmatched_files: true
+          body_path: ${{ env.TEMP }}\tag-message.txt
           generate_release_notes: false
           draft: false
           prerelease: false
@@ -120,6 +125,7 @@ jobs:
 
       - name: "Info (no tag detected)"
         if: steps.tag_exists.outputs.TAG_EXISTS != 'true'
+        shell: powershell
         run: |
           echo "No version tag found for this merge. Skipping release creation."
           echo "Tag '${{ steps.detect_tag.outputs.TAG }}' not found."

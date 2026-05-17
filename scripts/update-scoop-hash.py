@@ -10,7 +10,7 @@ def update_scoop_manifest(exe_hash: str, version: str) -> None:
     content = manifest.read_text(encoding="utf-8")
 
     content = re.sub(
-        r'"hash":\s*"[0-9a-fA-F]{64}"',
+        r'"hash":\s*"[^"]*"',
         f'"hash": "{exe_hash}"',
         content,
     )
