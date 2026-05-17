@@ -10,7 +10,7 @@
 </p>
 
 <p align="center">
-  <a href="https://github.com/ErickGuerron/MCP-Context-Life/releases"><img src="https://img.shields.io/badge/version-0.8.5-blue?style=flat-square" alt="Version" /></a>
+  <a href="https://github.com/ErickGuerron/MCP-Context-Life/releases"><img src="https://img.shields.io/badge/version-0.8.6-blue?style=flat-square" alt="Version" /></a>
   <a href="https://www.python.org/downloads/"><img src="https://img.shields.io/badge/python-%3E%3D3.10-brightgreen?style=flat-square" alt="Python" /></a>
   <a href="LICENSE.md"><img src="https://img.shields.io/badge/license-MIT-green?style=flat-square" alt="License" /></a>
   <a href="https://modelcontextprotocol.io"><img src="https://img.shields.io/badge/protocol-MCP-purple?style=flat-square" alt="MCP" /></a>
@@ -143,7 +143,7 @@ context-life warmup set startup        # Persist warmup mode: lazy|startup|manua
 context-life warmup interactive        # Interactive selector for warmup mode + prewarm
 context-life prewarm                   # Explicitly warm the RAG model now
 context-life upgrade                   # Upgrade to latest GitHub release
-context-life upgrade --version v0.8.5  # Install specific version
+context-life upgrade --version v0.8.6  # Install specific version
 context-life upgrade --dry-run         # Check without installing
 context-life version                   # Show version
 context-life help                      # Show help
