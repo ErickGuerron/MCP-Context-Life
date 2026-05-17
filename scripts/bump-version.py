@@ -86,19 +86,16 @@ def update_scoop_manifest(version: str) -> None:
         count=1,
     )
 
-    # Update URLs (replace version in URL paths)
+    # Update URLs (replace version in URL paths for .exe release artifact)
     static_content, autoupdate_marker, autoupdate_content = content.partition('"autoupdate": {')
     static_content = re.sub(
-        r'https://github\.com/[^/]+/[^/]+/releases/download/v[^/]+/context_life-[^"/]+-py3-none-any\.whl',
-        lambda _: (
-            f"https://github.com/ErickGuerron/MCP-Context-Life/releases/download/v{version}/"
-            f"context_life-{version}-py3-none-any.whl"
-        ),
+        r"https://github\.com/[^/]+/[^/]+/releases/download/v[^/]+/context-life\.exe",
+        f"https://github.com/ErickGuerron/MCP-Context-Life/releases/download/v{version}/context-life.exe",
         static_content,
     )
     autoupdate_content = re.sub(
-        r'https://github\.com/[^/]+/[^/]+/releases/download/v[^/]+/context_life-[^"/]+-py3-none-any\.whl',
-        "https://github.com/ErickGuerron/MCP-Context-Life/releases/download/v$version/context_life-$version-py3-none-any.whl",
+        r"https://github\.com/[^/]+/[^/]+/releases/download/v[^/]+/context-life\.exe",
+        "https://github.com/ErickGuerron/MCP-Context-Life/releases/download/v$version/context-life.exe",
         autoupdate_content,
     )
     content = static_content + autoupdate_marker + autoupdate_content

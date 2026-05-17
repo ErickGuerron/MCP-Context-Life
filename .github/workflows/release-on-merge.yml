@@ -109,6 +109,8 @@ jobs:
           RELEASE_ID=$(gh release view "${{ steps.detect_tag.outputs.TAG }}" --json id -q .id)
           TAG_BODY=$(cat /tmp/tag-message.txt)
           gh api PATCH /repos/${{ github.repository }}/releases/$RELEASE_ID -f body="$TAG_BODY"
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
       - name: "Info (no tag detected)"
         if: steps.tag_exists.outputs.TAG_EXISTS != 'true'
