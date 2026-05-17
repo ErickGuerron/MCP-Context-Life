@@ -32,7 +32,7 @@ jobs:
       - name: "Install build tooling"
         run: python -m pip install --upgrade pip build pyinstaller
 
-      - name: "Detect if this PR introduces a version tag"
+      - name: "Detect version tag"
         id: detect_tag
         run: |
           git fetch --tags --force
@@ -65,12 +65,23 @@ jobs:
           python -m PyInstaller --onefile --name context-life mmcp/__main__exe__.py --distpath dist --workpath build
           ls -la dist/
 
-      - name: "Get exe hash for Scoop manifest"
+      - name: "Get exe hash"
+        id: exe_hash
         if: steps.tag_exists.outputs.TAG_EXISTS == 'true'
         run: |
           EXE_HASH=$(sha256sum dist/context-life.exe | cut -d' ' -f1)
           echo "EXE_HASH=$EXE_HASH"
           echo "EXE_HASH=$EXE_HASH" >> $GITHUB_OUTPUT
+
+      - name: "Update Scoop bucket with real exe hash"
+        if: steps.tag_exists.outputs.TAG_EXISTS == 'true'
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          python scripts/update-scoop-hash.py "${{ steps.exe_hash.outputs.EXE_HASH }}" "${{ steps.detect_tag.outputs.VERSION }}"
+          git add bucket/context-life.json
+          git commit -m "chore(scoop): update exe hash for v${{ steps.detect_tag.outputs.VERSION }}"
+          git push origin HEAD:refs/heads/develop
 
       - name: "Get tag annotation (release notes)"
         if: steps.tag_exists.outputs.TAG_EXISTS == 'true'
