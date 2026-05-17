@@ -42,17 +42,7 @@ jobs:
           else
             PR_BASE_BRANCH="${{ github.event.pull_request.base.ref }}"
             echo "PR base: $PR_BASE_BRANCH"
-            VERSION=$(python - <<'PY'
-from pathlib import Path
-import re
-
-content = Path('pyproject.toml').read_text(encoding='utf-8')
-match = re.search(r'^version\s*=\s*"([^"]+)"', content, re.MULTILINE)
-if not match:
-    raise SystemExit('ERROR: Could not find version in pyproject.toml')
-print(match.group(1))
-PY
-)
+            VERSION=$(python -c "from pathlib import Path; import re; content = Path('pyproject.toml').read_text(encoding='utf-8'); match = re.search(r'^version\s*=\s*\"([^\"]+)\"', content, re.MULTILINE); print(match.group(1) if match else '')")
             TAG="v$VERSION"
           fi
           echo "VERSION=$VERSION" >> $GITHUB_OUTPUT
@@ -68,9 +58,20 @@ PY
             echo "TAG_EXISTS=false" >> $GITHUB_OUTPUT
           fi
 
-      - name: "Build wheel"
+      - name: "Build wheel and exe"
         if: steps.tag_exists.outputs.TAG_EXISTS == 'true'
-        run: python -m build --wheel
+        run: |
+          pip install pyinstaller
+          python -m build --wheel
+          python -m PyInstaller --onefile --name context-life mmcp/__main__exe__.py --distpath dist --workpath build
+          ls -la dist/
+
+      - name: "Get exe hash for Scoop manifest"
+        if: steps.tag_exists.outputs.TAG_EXISTS == 'true'
+        run: |
+          EXE_HASH=$(sha256sum dist/context-life.exe | cut -d' ' -f1)
+          echo "EXE_HASH=$EXE_HASH"
+          echo "EXE_HASH=$EXE_HASH" >> $GITHUB_OUTPUT
 
       - name: "Get tag annotation (release notes)"
         if: steps.tag_exists.outputs.TAG_EXISTS == 'true'
@@ -83,7 +84,7 @@ PY
         with:
           tag_name: ${{ steps.detect_tag.outputs.TAG }}
           name: "Context-Life ${{ steps.detect_tag.outputs.VERSION }}"
-          files: dist/*.whl
+          files: dist/*.whl dist/context-life.exe
           body: |
             See tag annotation for release notes.
           generate_release_notes: false
