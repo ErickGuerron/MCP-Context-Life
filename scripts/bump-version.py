@@ -176,34 +176,31 @@ def check_versions() -> bool:
     if manifest.exists():
         content = manifest.read_text(encoding="utf-8")
         static_content, _, autoupdate_content = content.partition('"autoupdate": {')
-        wheel_urls = re.findall(
-            r"https://github\.com/[^/]+/[^/]+/releases/download/v([^/]+)/context_life-([^/]+)-py3-none-any\.whl",
+        # Check exe URL and hash (the primary release artifact)
+        exe_url_match = re.search(
+            r"\"url\":\s*\"https://github\.com/[^/]+/[^/]+/releases/download/v([0-9.]+)/context-life\.exe\"",
             static_content,
         )
-        if not wheel_urls:
-            print("  [MISMATCH] bucket/context-life.json wheel URL: pattern not found")
-            all_ok = False
+        if exe_url_match:
+            status = "[OK]" if exe_url_match.group(1) == expected else "[MISMATCH]"
+            print(f"  {status} bucket/context-life.json exe URL: v{exe_url_match.group(1)}")
+            if exe_url_match.group(1) != expected:
+                all_ok = False
         else:
-            for download_version, package_version in wheel_urls:
-                status = "[OK]" if download_version == expected and package_version == expected else "[MISMATCH]"
-                print(f"  {status} bucket/context-life.json wheel URL: v{download_version} / {package_version}")
-                if download_version != expected or package_version != expected:
-                    all_ok = False
+            print("  [MISMATCH] bucket/context-life.json exe URL: pattern not found")
+            all_ok = False
 
         hashes = re.findall(r'"hash":\s*"([0-9a-fA-F]{64})"', static_content)
-        if len(hashes) < 3:
-            print("  [MISMATCH] bucket/context-life.json hash entries: expected 3 release hashes")
-            all_ok = False
-        else:
+        if hashes:
             zero_hash = "0" * 64
-            for index, hash_value in enumerate(hashes[:3], start=1):
+            for index, hash_value in enumerate(hashes, start=1):
                 status = "[OK]" if hash_value.lower() != zero_hash else "[MISMATCH]"
                 print(f"  {status} bucket/context-life.json hash #{index}: {hash_value.lower()}")
                 if hash_value.lower() == zero_hash:
                     all_ok = False
 
         autoupdate_urls = re.findall(
-            r"https://github\.com/[^/]+/[^/]+/releases/download/v\$version/context_life-\$version-py3-none-any\.whl",
+            r"https://github\.com/[^/]+/[^/]+/releases/download/v\$version/context-life\.exe",
             autoupdate_content,
         )
         if len(autoupdate_urls) != 2:
