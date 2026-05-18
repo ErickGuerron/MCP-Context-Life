@@ -16,7 +16,7 @@
         }
     },
     "bin": [
-        "context-life"
+        "context-life.exe"
     ],
     "checkver": {
         "github": "https://github.com/ErickGuerron/MCP-Context-Life"
