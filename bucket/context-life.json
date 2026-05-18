@@ -1,18 +1,18 @@
 {
-    "version": "0.8.7",
+    "version": "0.8.9",
     "description": "Context-Life (CL) — LLM context optimization MCP server with local RAG, trim history, token counting, and prompt caching.",
     "homepage": "https://github.com/ErickGuerron/MCP-Context-Life",
     "license": "MIT",
-    "url": "https://github.com/ErickGuerron/MCP-Context-Life/releases/download/v0.8.7/context-life.exe",
-    "hash": "DC16A5D1244B74398192E0446B05D72337A349EDCA7FF7B10E870EB9359B5E50",
+    "url": "https://github.com/ErickGuerron/MCP-Context-Life/releases/download/v0.8.9/context-life.exe",
+    "hash": "73A6521156662E681D548A36ECA537CB728482A3FCE12749C43E5A9107DFE093",
     "architecture": {
         "amd64": {
-            "url": "https://github.com/ErickGuerron/MCP-Context-Life/releases/download/v0.8.7/context-life.exe",
-            "hash": "DC16A5D1244B74398192E0446B05D72337A349EDCA7FF7B10E870EB9359B5E50"
+            "url": "https://github.com/ErickGuerron/MCP-Context-Life/releases/download/v0.8.9/context-life.exe",
+            "hash": "73A6521156662E681D548A36ECA537CB728482A3FCE12749C43E5A9107DFE093"
         },
         "arm64": {
-            "url": "https://github.com/ErickGuerron/MCP-Context-Life/releases/download/v0.8.7/context-life.exe",
-            "hash": "DC16A5D1244B74398192E0446B05D72337A349EDCA7FF7B10E870EB9359B5E50"
+            "url": "https://github.com/ErickGuerron/MCP-Context-Life/releases/download/v0.8.9/context-life.exe",
+            "hash": "73A6521156662E681D548A36ECA537CB728482A3FCE12749C43E5A9107DFE093"
         }
     },
     "bin": [
@@ -24,10 +24,10 @@
     "autoupdate": {
         "architecture": {
             "amd64": {
-                "url": "https://github.com/ErickGuerron/MCP-Context-Life/releases/download/v$version/context-life.exe"
+                "url": "https://github.com/ErickGuerron/MCP-Context-Life/releases/download/v0.8.9/context-life.exe"
             },
             "arm64": {
-                "url": "https://github.com/ErickGuerron/MCP-Context-Life/releases/download/v$version/context-life.exe"
+                "url": "https://github.com/ErickGuerron/MCP-Context-Life/releases/download/v0.8.9/context-life.exe"
             }
         }
     }
