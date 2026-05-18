@@ -93,10 +93,13 @@ hidden_imports += collect_submodules("mcp")
 # Data files — non-Python assets needed at runtime
 # -----------------------------------------------------------------------
 
-datas = [
-    # tiktoken vocabulary files
-    ("C:/Users/erick/AppData/Local/Temp/pypoetry/*/site-packages/tiktoken/*.json", "tiktoken"),
-]
+# tiktoken vocab files - collect from installed package
+try:
+    _tiktoken_data = collect_data_files("tiktoken")
+except Exception:
+    _tiktoken_data = []
+
+datas = _tiktoken_data
 
 # -----------------------------------------------------------------------
 # Excluded modules — binaries that should NOT be included
@@ -104,13 +107,10 @@ datas = [
 
 excludes = [
     "matplotlib",
-    "numpy",
-    "scipy",
     "pandas",
     "sklearn",
     "PIL",
     "cv2",
-    "torch",
 ]
 
 # -----------------------------------------------------------------------
