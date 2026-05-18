@@ -244,6 +244,7 @@ def do_upgrade(target_version: str | None = None, dry_run: bool = False, inside_
                 [sys.executable, "-m", "pip", "install", "--upgrade", install_target],
                 capture_output=True,
                 text=True,
+                encoding="utf-8",
             )
 
         if result.returncode == 0:
