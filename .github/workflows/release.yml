@@ -1,15 +1,16 @@
-name: "Build, Hash & Update Scoop Manifest"
+name: "Build, Create Release & Update Scoop Manifest"
 
 on:
-  release:
-    types: [published]
+  push:
+    tags:
+      - 'v*'
 
 permissions:
   contents: write
 
 jobs:
-  build-and-update-scoop:
-    name: "Build exe, compute hash, update scoop manifest"
+  build-release-scoop:
+    name: "Build exe, create release, update scoop manifest"
     runs-on: windows-latest
 
     steps:
@@ -53,6 +54,20 @@ jobs:
           $exeHash = (Get-FileHash dist/context-life.exe -Algorithm SHA256 | Select-Object -ExpandProperty Hash)
           echo "EXE_HASH=$exeHash" | Out-File -FilePath $env:GITHUB_OUTPUT -Encoding utf8 -Append
           echo "SHA256: $exeHash"
+
+      - name: "Create GitHub Release"
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ steps.version_from_tag.outputs.TAG }}
+          name: "Context-Life ${{ steps.version_from_tag.outputs.VERSION }}"
+          files: |
+            dist/context-life.exe
+            dist/*.whl
+          generate_release_notes: true
+          draft: false
+          prerelease: false
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
       - name: "Update Scoop bucket with real exe hash"
         shell: powershell
