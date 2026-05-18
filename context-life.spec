@@ -1,6 +1,6 @@
 # -*- mode: python ; coding: utf-8 -*-
 
-from PyInstaller.utils.hooks import collect_all_submodules, collect_submodules, collect_data_files
+from PyInstaller.utils.hooks import collect_submodules, collect_data_files
 
 # -----------------------------------------------------------------------
 # Hidden imports — modules that PyInstaller cannot detect automatically
