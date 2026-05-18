@@ -41,8 +41,9 @@ jobs:
       - name: "Build wheel and exe"
         shell: powershell
         run: |
+          pip install -e .
           python -m build --wheel
-          python -m PyInstaller --onefile --name context-life mmcp/__main__.py --distpath dist --workpath build
+          python -m PyInstaller context-life.spec --distpath dist --workpath build
           if (-not (Test-Path dist/context-life.exe)) { throw "context-life.exe was not generated" }
           echo "=== dist/ contents ==="
           Get-ChildItem dist/ | Format-Table Name, Length, LastWriteTime
