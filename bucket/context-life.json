@@ -4,15 +4,15 @@
     "homepage": "https://github.com/ErickGuerron/MCP-Context-Life",
     "license": "MIT",
     "url": "https://github.com/ErickGuerron/MCP-Context-Life/releases/download/v0.8.7/context-life.exe",
-    "hash": "A76B05A6C061B10DFA5406623FA308FAC9AFB7C3FBD50301518E8C59326EBC03",
+    "hash": "DC16A5D1244B74398192E0446B05D72337A349EDCA7FF7B10E870EB9359B5E50",
     "architecture": {
         "amd64": {
             "url": "https://github.com/ErickGuerron/MCP-Context-Life/releases/download/v0.8.7/context-life.exe",
-            "hash": "A76B05A6C061B10DFA5406623FA308FAC9AFB7C3FBD50301518E8C59326EBC03"
+            "hash": "DC16A5D1244B74398192E0446B05D72337A349EDCA7FF7B10E870EB9359B5E50"
         },
         "arm64": {
             "url": "https://github.com/ErickGuerron/MCP-Context-Life/releases/download/v0.8.7/context-life.exe",
-            "hash": "A76B05A6C061B10DFA5406623FA308FAC9AFB7C3FBD50301518E8C59326EBC03"
+            "hash": "DC16A5D1244B74398192E0446B05D72337A349EDCA7FF7B10E870EB9359B5E50"
         }
     },
     "bin": [
