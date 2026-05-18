@@ -17,6 +17,7 @@ jobs:
       - name: "Checkout"
         uses: actions/checkout@v4
         with:
+          ref: main
           fetch-depth: 0
           fetch-tags: true
 
@@ -82,6 +83,11 @@ jobs:
       - name: "Commit and push updated manifest"
         shell: powershell
         run: |
+          git checkout main
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          python scripts/update-scoop-hash.py "${{ steps.exe_hash.outputs.EXE_HASH }}" "${{ steps.version_from_tag.outputs.VERSION }}"
+          git add bucket/context-life.json
           git diff --cached --quiet bucket/context-life.json
           if ($LASTEXITCODE -eq 0) {
             echo "No changes to commit - bucket manifest is already up to date"
